@@ -94,8 +94,9 @@ Optional: check that every tag value has a fair share of the data.
 python stats.py --data data/prepared --split train
 ```
 
-If one value is almost empty, adjust the bucket thresholds in `tags.py` and run
-`prepare.py` again.
+If one value is almost empty, adjust the bucket thresholds in `tags.py`. These
+tags are measured when batches are built, so you don't need to run `prepare.py`
+again (you do if you change the `ERA` table).
 
 ## 5. Train
 
@@ -105,6 +106,36 @@ batch 32, 20,000 steps.
 ```bash
 python train.py --data data/prepared --out runs/v1
 ```
+
+### Macs with 16 GB of memory or less: use `--batch 8`
+
+The default batch (32 sequences × 1024 tokens) needs more than 16 GB during
+training, because attention keeps a 1024×1024 grid per head and layer for
+backprop. On a 16 GB Mac the run starts swapping and never prints a progress
+line. Use a smaller batch instead:
+
+```bash
+python train.py --data data/prepared --out runs/v1 --batch 8
+```
+
+This needs roughly 4 GB. `--batch 16` (about 7 GB) may work if you close other
+apps. Signs that you're out of memory: no `step 50` line after a few minutes,
+and swap use climbing in Activity Monitor.
+
+### How long it takes
+
+Each progress line shows `tokens/s`. Estimate the total time with:
+
+```
+hours ≈ steps × batch × 1023 / tokens_per_s / 3600
+```
+
+As a rough guide, an M1 Pro runs at about 10–15k tokens/s on the default model,
+so 20,000 steps at `--batch 8` take about 3–5 hours. The first progress line
+takes a minute or two because MLX compiles the training step once. To shorten
+the run, lower `--steps` (for example `--steps 10000`). `best.safetensors` is
+saved whenever validation improves, so you can stop at any point and still
+have a usable model.
 
 What happens while it runs:
 
@@ -153,7 +184,8 @@ Only the optimiser's step counter is restored; its momentum buffers start fresh.
 
 - **`loss is not finite: lower --lr`**: training diverged. Restart with a smaller
   `--lr`, for example `1e-4`.
-- **Out of memory**: lower `--batch` (for example 16) or `--ctx` (for example 512).
+- **No progress lines, heavy swapping**: you're out of memory. Lower `--batch`
+  (8 on a 16 GB Mac) or `--ctx` (for example 512). See "Macs with 16 GB of memory" above.
 - **Odd errors in the training step**: add `--no-compile` to get readable
   tracebacks.
 
@@ -230,7 +262,7 @@ unzip -q data/maestro-v3.0.0-midi.zip -d data
 
 python prepare.py  --maestro data/maestro-v3.0.0 --out data/prepared
 python stats.py    --data data/prepared
-python train.py    --data data/prepared --out runs/v1          # add --resume to continue
+python train.py    --data data/prepared --out runs/v1 --batch 8  # add --resume to continue
 python evaluate.py --model runs/v1/best --data data/prepared --split test
 python sample.py   --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
 ```
