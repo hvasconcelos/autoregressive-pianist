@@ -45,5 +45,5 @@ uv run python docs/build.py --format html    # one self-contained HTML page for 
   ```
 
   Use `{.admonition .warning}` for the amber variant.
-- **Figures** are an image alone in its paragraph; the alt text becomes the caption: `![**Figure 1.** The five stages…](../images/pipeline.png)`. Figure numbers are written by hand.
+- **Figures** are an image alone in its paragraph; the alt text becomes the caption: `![**Figure 1.** The five stages…](../images/pipeline.svg)`. Figure numbers are written by hand.
 - **Quotes** stay straight: the build turns off smart quotes, so `"` and `'` appear exactly as typed.

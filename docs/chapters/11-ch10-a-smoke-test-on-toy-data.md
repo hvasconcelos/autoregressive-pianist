@@ -108,7 +108,7 @@ Training printed these evaluation lines:
 == step 1500: train 1.839  val 1.903  (best, saved)
 ```
 
-![**Figure 4.** Loss during the toy run. The training figure is the average over the 250 steps before each point, with augmentation and dropout on, which is why it sits above the validation figure early on.](../images/toy-loss.png)
+![**Figure 4.** Loss during the toy run. The training figure is the average over the 250 steps before each point, with augmentation and dropout on, which is why it sits above the validation figure early on.](../images/toy-loss.svg)
 
 The loss began between 6 and 7 and was under 2 by the end, which shows that the model is learning. Your numbers will differ slightly in the last digits.
 

@@ -28,7 +28,7 @@ One pass through the model scores all 1,000 positions at once. This is possible 
 
 The model is a stack of identical layers. Data flows through it like this.
 
-![**Figure 2.** The model. Data flows from top to bottom; the dashed box is repeated six times.](../images/model.png)
+![**Figure 2.** The model. Data flows from top to bottom; the dashed box is repeated six times.](../images/model.svg)
 
 **Embedding.** Each token id is replaced by a list of 512 numbers, called a vector. The table that holds one vector per token is learned. Tokens that behave similarly, such as neighbouring pitches, end up with similar vectors.
 

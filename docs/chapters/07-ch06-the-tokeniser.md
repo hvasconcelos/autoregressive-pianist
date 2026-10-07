@@ -231,7 +231,7 @@ Pitch_72 Vel_94 Dur_500 Shift_500 Pitch_71 Vel_90 Dur_1000
  408, 110, 170, 228, 408, 109, 169, 278]
 ```
 
-![**Figure 3.** The same six notes as a piano roll. Each bar is a note: its row is the pitch, its length the duration, its shade the velocity. Underneath, the tokens for each note; the Shift token (orange) is the distance to the next note's start.](../images/piano-roll.png)
+![**Figure 3.** The same six notes as a piano roll. Each bar is a note: its row is the pitch, its length the duration, its shade the velocity. Underneath, the tokens for each note; the Shift token (orange) is the distance to the next note's start.](../images/piano-roll.svg)
 
 The six notes of "Hap-py birth-day to you" became 27 integers. The second line of output is what the model actually sees. Notice the small effects of the grid: the first note's 375 ms wait became `Shift_380`, and its velocity of 80 became `Vel_82`, the centre of its bin.
 

@@ -8,7 +8,7 @@ The model produces tokens at an uneven rate. A chord of six notes needs about tw
 
 The solution is the one every media player uses: generate ahead into a buffer, and release from the buffer by the clock.
 
-![**Figure 5.** The scheduler. The model writes notes at the head; the clock releases them as “now” passes over them. Generation runs whenever the gap is smaller than the lookahead.](../images/scheduler.png)
+![**Figure 5.** The scheduler. The model writes notes at the head; the clock releases them as “now” passes over them. Generation runs whenever the gap is smaller than the lookahead.](../images/scheduler.svg)
 
 There are two clocks. **Music time** is the position in the piece: the sum of all the Shift tokens so far. **Wall-clock time** is the real time since playing started. The scheduler keeps the music-time position of the newest generated note (the *head*) about one second ahead of the wall clock, and sends each event when the wall clock reaches its music time.
 

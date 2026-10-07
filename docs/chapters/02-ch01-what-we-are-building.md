@@ -2,7 +2,7 @@
 
 The finished system is a chain of five small pieces. A request goes in at one end and key presses come out of the other.
 
-![**Figure 1.** The five stages, with an example of what passes between them.](../images/pipeline.png)
+![**Figure 1.** The five stages, with an example of what passes between them.](../images/pipeline.svg)
 
 1.  **The request.** Plain words from you: "fast and loud, in C major".
 2.  **Tags.** A handful of labels from a fixed list, such as `<density:dense>`, `<dynamics:f>` and `<key:Cmaj>`. In Part I a small table of keywords turns the request into tags. The model itself only ever sees tags.

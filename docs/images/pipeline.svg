@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 805 122" width="805" height="122" role="img" font-family="Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<title>The five stages of the system, from request to instrument</title>
+<defs>
+  <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a1a1a"/></marker>
+  <marker id="ahb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2b7bd6"/></marker>
+</defs>
+<rect width="805" height="122" fill="#fff"/>
+<rect x="5" y="12" width="130" height="58" rx="6" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+<text x="70" y="39" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="600">Request</text>
+<text x="70" y="60" font-size="11.5" fill="#555" text-anchor="middle">plain words</text>
+<text x="70" y="95" font-size="11.5" fill="#555" text-anchor="middle">“fast and loud,</text>
+<text x="70" y="110" font-size="11.5" fill="#555" text-anchor="middle">in C major”</text>
+<line x1="141" y1="41" x2="166" y2="41" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="172" y="12" width="130" height="58" rx="6" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+<text x="237" y="39" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="600">Tags</text>
+<text x="237" y="60" font-size="11.5" fill="#555" text-anchor="middle">from a fixed list</text>
+<text x="237" y="95" font-size="11.5" fill="#555" text-anchor="middle">&lt;density:dense&gt;</text>
+<text x="237" y="110" font-size="11.5" fill="#555" text-anchor="middle">&lt;dynamics:f&gt; &lt;key:Cmaj&gt;</text>
+<line x1="308" y1="41" x2="333" y2="41" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="339" y="12" width="130" height="58" rx="6" fill="#eef3fa" stroke="#1a1a1a" stroke-width="1.5"/>
+<text x="404" y="39" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="600">Model</text>
+<text x="404" y="60" font-size="11.5" fill="#555" text-anchor="middle">one token at a time</text>
+<text x="404" y="95" font-size="11.5" fill="#555" text-anchor="middle">Pitch_60 Vel_98</text>
+<text x="404" y="110" font-size="11.5" fill="#555" text-anchor="middle">Dur_120 Shift_90 …</text>
+<line x1="475" y1="41" x2="500" y2="41" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="506" y="12" width="130" height="58" rx="6" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+<text x="571" y="39" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="600">Scheduler</text>
+<text x="571" y="60" font-size="11.5" fill="#555" text-anchor="middle">1 s buffer</text>
+<text x="571" y="95" font-size="11.5" fill="#555" text-anchor="middle">note_on at</text>
+<text x="571" y="110" font-size="11.5" fill="#555" text-anchor="middle">t = 12.430 s</text>
+<line x1="642" y1="41" x2="667" y2="41" stroke="#1a1a1a" stroke-width="1.5" marker-end="url(#ah)"/>
+<rect x="673" y="12" width="130" height="58" rx="6" fill="#fff" stroke="#1a1a1a" stroke-width="1.5"/>
+<text x="738" y="39" font-size="14" fill="#1a1a1a" text-anchor="middle" font-weight="600">Instrument</text>
+<text x="738" y="60" font-size="11.5" fill="#555" text-anchor="middle">MIDI</text>
+<text x="738" y="95" font-size="11.5" fill="#555" text-anchor="middle">piano or</text>
+<text x="738" y="110" font-size="11.5" fill="#555" text-anchor="middle">software piano</text>
+</svg>
