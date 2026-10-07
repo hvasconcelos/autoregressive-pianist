@@ -1,6 +1,6 @@
 """Measure a trained model: loss on held-out music, and whether it obeys tags.
 
-    python evaluate.py --model runs/v1/best --data data/prepared
+    uv run python evaluate.py --model runs/v1/best --data data/prepared
 """
 # argparse: command-line options; os: building file paths
 import argparse, os

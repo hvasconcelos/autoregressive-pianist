@@ -1,6 +1,6 @@
 """Turn a request written in plain words into tags.
 
-    python request.py "something slow and quiet in D minor, like Chopin"
+    uv run python request.py "something slow and quiet in D minor, like Chopin"
 
 Two ways: a keyword table (instant, no model needed) and, with --llm, a
 small language model that fills in the tags as JSON.

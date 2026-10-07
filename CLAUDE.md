@@ -10,20 +10,20 @@ A small GPT-style model, trained on the MAESTRO piano dataset, that generates ex
 
 ```bash
 # end-to-end smoke test on fake data (minutes); use this to check changes
-python make_toy_data.py --out data/toy
-python prepare.py --maestro data/toy --out data/toy_prepared
-python train.py --data data/toy_prepared --out runs/toy --steps 1500 --ctx 192 --dim 96 --layers 2 --heads 4 --eval-every 250
-python evaluate.py --model runs/toy/best --data data/toy_prepared
-python sample.py --model runs/toy/best --request "fast and loud" --out toy.mid
+uv run python make_toy_data.py --out data/toy
+uv run python prepare.py --maestro data/toy --out data/toy_prepared
+uv run python train.py --data data/toy_prepared --out runs/toy --steps 1500 --ctx 192 --dim 96 --layers 2 --heads 4 --eval-every 250
+uv run python evaluate.py --model runs/toy/best --data data/toy_prepared
+uv run python sample.py --model runs/toy/best --request "fast and loud" --out toy.mid
 
 # quick self-checks
-python tokenizer.py                          # encode/decode round trip, prints vocab size
-python request.py "slow and quiet in D minor" # shows which tags a request becomes
-python stats.py --data data/prepared          # tag value distribution in a split
+uv run python tokenizer.py                          # encode/decode round trip, prints vocab size
+uv run python request.py "slow and quiet in D minor" # shows which tags a request becomes
+uv run python stats.py --data data/prepared          # tag value distribution in a split
 
 # real run (MAESTRO unzipped to data/maestro-v3.0.0)
-python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
-python train.py --data data/prepared --out runs/v1 --batch 8   # add --resume to continue
+uv run python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
+uv run python train.py --data data/prepared --out runs/v1 --batch 8   # add --resume to continue
 ```
 
 On the user's 16 GB M1 Pro, the default `--batch 32` with `--ctx 1024` swaps heavily and makes no visible progress. Use `--batch 8`. Training prints a line only every 50 steps, and the first one is delayed further because `mx.compile` traces the training step once. `--no-compile` gives readable tracebacks.

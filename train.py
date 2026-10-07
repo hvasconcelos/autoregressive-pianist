@@ -1,6 +1,6 @@
 """Train the model.
 
-    python train.py --data data/prepared --out runs/v1
+    uv run python train.py --data data/prepared --out runs/v1
 """
 # argparse: command-line options; math: isfinite check; os: paths/folders; time: throughput timing
 import argparse, math, os, time

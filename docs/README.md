@@ -17,8 +17,8 @@ docs/
 Needs [pandoc](https://pandoc.org) 3 (`brew install pandoc`).
 
 ```bash
-python docs/build.py                  # docs/build/The-Autoregressive-Pianist.epub
-python docs/build.py --format html    # one self-contained HTML page for proofreading
+uv run python docs/build.py                  # docs/build/The-Autoregressive-Pianist.epub
+uv run python docs/build.py --format html    # one self-contained HTML page for proofreading
 ```
 
 ## Writing conventions

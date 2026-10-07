@@ -1,6 +1,6 @@
 """Turn the MAESTRO MIDI files into three compact files of note arrays.
 
-    python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
+    uv run python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
 
 Writes train.npz, validation.npz and test.npz. Each holds every note of the
 split in one big array, plus where each piece starts and its composer tags.

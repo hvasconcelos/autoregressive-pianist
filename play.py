@@ -1,7 +1,7 @@
 """Play in real time on a MIDI instrument.
 
-    python play.py --list
-    python play.py --port "IAC Driver Bus 1" --request "calm, quiet, in F major"
+    uv run python play.py --list
+    uv run python play.py --port "IAC Driver Bus 1" --request "calm, quiet, in F major"
 
 While it plays, type a new request and press Enter to change the music.
 Ctrl-C stops (and silences every key).

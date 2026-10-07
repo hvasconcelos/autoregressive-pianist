@@ -1,8 +1,8 @@
 """Build the EPUB of the book from the Markdown sources in this folder.
 
-    python docs/build.py                       # writes docs/build/The-Autoregressive-Pianist.epub
-    python docs/build.py --out book.epub       # choose the output file
-    python docs/build.py --format html         # one standalone HTML page, handy for proofreading
+    uv run python docs/build.py                       # writes docs/build/The-Autoregressive-Pianist.epub
+    uv run python docs/build.py --out book.epub       # choose the output file
+    uv run python docs/build.py --format html         # one standalone HTML page, handy for proofreading
 
 The Markdown files in docs/chapters are the source of truth. Each one becomes
 one file inside the EPUB, in file-name order, so the numeric prefix sets the

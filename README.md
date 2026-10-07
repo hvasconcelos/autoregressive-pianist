@@ -29,15 +29,17 @@ MAESTRO MIDI ──prepare.py──▶ data/prepared/*.npz ──train.py──�
 
 ## 1. Setup
 
-You need a Mac with Apple Silicon and Python 3.10 or newer (developed on 3.12).
+You need a Mac with Apple Silicon, [uv](https://docs.astral.sh/uv/) and Python 3.10
+or newer (developed on 3.12).
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install mlx numpy mido python-rtmidi
+uv venv --python 3.12
+uv pip install mlx numpy mido python-rtmidi
 ```
 
-`python-rtmidi` is only needed by `play.py` to open real MIDI ports.
+`python-rtmidi` is only needed by `play.py` to open real MIDI ports. Every command
+below runs through `uv run`, which uses the `.venv` in the project folder, so there
+is no environment to activate.
 
 ## 2. Smoke test on toy data (about 5 minutes)
 
@@ -46,18 +48,18 @@ This checks that every stage works.
 
 ```bash
 # 120 random "pieces" laid out like MAESTRO
-python make_toy_data.py --out data/toy
+uv run python make_toy_data.py --out data/toy
 
 # MIDI -> .npz
-python prepare.py --maestro data/toy --out data/toy_prepared
+uv run python prepare.py --maestro data/toy --out data/toy_prepared
 
 # a tiny model, trained briefly
-python train.py --data data/toy_prepared --out runs/toy \
+uv run python train.py --data data/toy_prepared --out runs/toy \
     --steps 1500 --ctx 192 --dim 96 --layers 2 --heads 4 --eval-every 250
 
 # check it end to end
-python evaluate.py --model runs/toy/best --data data/toy_prepared
-python sample.py --model runs/toy/best --request "fast and loud" --out toy.mid
+uv run python evaluate.py --model runs/toy/best --data data/toy_prepared
+uv run python sample.py --model runs/toy/best --request "fast and loud" --out toy.mid
 ```
 
 Validation loss should drop from about 2.5 to about 1.9.
@@ -79,7 +81,7 @@ year (`2004/`, `2006/`, ...).
 ## 4. Prepare the data
 
 ```bash
-python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
+uv run python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
 ```
 
 This reads every performance, keeps the 88 piano keys, drops fragments with fewer
@@ -91,7 +93,7 @@ at the end; you can add them to the table in `tags.py`.
 Optional: check that every tag value has a fair share of the data.
 
 ```bash
-python stats.py --data data/prepared --split train
+uv run python stats.py --data data/prepared --split train
 ```
 
 If one value is almost empty, adjust the bucket thresholds in `tags.py`. These
@@ -104,7 +106,7 @@ The defaults are the full model: 6 layers, width 512, 8 heads, 1024-token contex
 batch 32, 20,000 steps.
 
 ```bash
-python train.py --data data/prepared --out runs/v1
+uv run python train.py --data data/prepared --out runs/v1
 ```
 
 ### Macs with 16 GB of memory or less: use `--batch 8`
@@ -115,7 +117,7 @@ backprop. On a 16 GB Mac the run starts swapping and never prints a progress
 line. Use a smaller batch instead:
 
 ```bash
-python train.py --data data/prepared --out runs/v1 --batch 8
+uv run python train.py --data data/prepared --out runs/v1 --batch 8
 ```
 
 This needs roughly 4 GB. `--batch 16` (about 7 GB) may work if you close other
@@ -154,7 +156,7 @@ If training stops, run the same command again with `--resume`. Training picks up
 from `runs/v1/last` and continues the step count, LR schedule and log file:
 
 ```bash
-python train.py --data data/prepared --out runs/v1 --resume
+uv run python train.py --data data/prepared --out runs/v1 --resume
 ```
 
 Only the optimiser's step counter is restored; its momentum buffers start fresh.
@@ -192,7 +194,7 @@ Only the optimiser's step counter is restored; its momentum buffers start fresh.
 ## 6. Evaluate
 
 ```bash
-python evaluate.py --model runs/v1/best --data data/prepared
+uv run python evaluate.py --model runs/v1/best --data data/prepared
 ```
 
 This prints:
@@ -209,9 +211,9 @@ This prints:
 To write a MIDI file:
 
 ```bash
-python sample.py --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
+uv run python sample.py --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
 # or with exact tags
-python sample.py --model runs/v1/best --tags key=Dmin,dynamics=p,density=sparse --out out.mid
+uv run python sample.py --model runs/v1/best --tags key=Dmin,dynamics=p,density=sparse --out out.mid
 ```
 
 Useful flags: `--notes` (default 400), `--temperature` (default 1.0),
@@ -220,7 +222,7 @@ Useful flags: `--notes` (default 400), `--temperature` (default 1.0),
 To see which tags a request becomes:
 
 ```bash
-python request.py "something slow and quiet in D minor, like Chopin"
+uv run python request.py "something slow and quiet in D minor, like Chopin"
 ```
 
 Available tag values:
@@ -237,8 +239,8 @@ Available tag values:
 ## 8. Play in real time
 
 ```bash
-python play.py --list                                   # show MIDI output ports
-python play.py --port "IAC Driver Bus 1" --request "calm, quiet, in F major"
+uv run python play.py --list                                   # show MIDI output ports
+uv run python play.py --port "IAC Driver Bus 1" --request "calm, quiet, in F major"
 ```
 
 While it plays, type a new request and press Enter to change the music. Ctrl-C
@@ -253,18 +255,18 @@ has to be faster than the music for `play.py` to keep up. If it isn't, raise
 ## Full run, start to finish
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install mlx numpy mido python-rtmidi
+uv venv --python 3.12
+uv pip install mlx numpy mido python-rtmidi
 
 curl -L -o data/maestro-v3.0.0-midi.zip --create-dirs \
   https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0-midi.zip
 unzip -q data/maestro-v3.0.0-midi.zip -d data
 
-python prepare.py  --maestro data/maestro-v3.0.0 --out data/prepared
-python stats.py    --data data/prepared
-python train.py    --data data/prepared --out runs/v1 --batch 8  # add --resume to continue
-python evaluate.py --model runs/v1/best --data data/prepared --split test
-python sample.py   --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
+uv run python prepare.py  --maestro data/maestro-v3.0.0 --out data/prepared
+uv run python stats.py    --data data/prepared
+uv run python train.py    --data data/prepared --out runs/v1 --batch 8  # add --resume to continue
+uv run python evaluate.py --model runs/v1/best --data data/prepared --split test
+uv run python sample.py   --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
 ```
 
 `data/` and `runs/` are git-ignored.

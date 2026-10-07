@@ -1,6 +1,6 @@
 """Write a tiny fake dataset laid out exactly like MAESTRO, for smoke tests.
 
-    python make_toy_data.py --out data/toy
+    uv run python make_toy_data.py --out data/toy
 
 The "music" is a random walk on a scale over simple chords. It is not good
 music; it has an obvious key, loudness, speed and register, so we can check

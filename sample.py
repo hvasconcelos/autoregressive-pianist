@@ -1,6 +1,6 @@
 """Generate a performance into a MIDI file (not in real time).
 
-    python sample.py --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
+    uv run python sample.py --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
 """
 # argparse: command-line options; time: measure generation speed
 import argparse, time

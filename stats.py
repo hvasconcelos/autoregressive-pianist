@@ -1,6 +1,6 @@
 """Show how the tags are distributed in a prepared split.
 
-    python stats.py --data data/prepared
+    uv run python stats.py --data data/prepared
 
 Use it to check that every tag value has a healthy share of the data
 before you train. If one value is almost empty, move the thresholds
