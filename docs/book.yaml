@@ -1,0 +1,12 @@
+# Book-wide metadata for the EPUB. Paths are relative to this docs/ folder.
+title: The Autoregressive Pianist
+subtitle: Training a small model that plays the piano in real time
+date: 2026-10
+lang: en-GB
+# Keep the identifier stable so e-readers treat rebuilds as the same book.
+identifier:
+  - scheme: UUID
+    text: urn:uuid:de660375-48f4-4a98-a6e4-f45f153927b6
+cover-image: images/cover.png
+css: epub.css
+toc-title: The Autoregressive Pianist
