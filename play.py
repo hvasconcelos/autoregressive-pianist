@@ -119,7 +119,7 @@ def play(performer, port, lookahead=1.0, seconds=None, commands=None, to_request
                 time.sleep(0.002)                  # the buffer is full: rest
                 continue
             r = performer.step()                   # generate one token
-            # r is "end", empty (no note completed by this token),
+            # r is "end", None (no note finished on this token),
             # or a finished note (wait_ms, pitch, vel, dur_ms)
             if r == "end":
                 break
@@ -179,7 +179,7 @@ def main():
     from model import Pianist
     from performer import MLXBackend
     # --tags gives the conditioning tags directly; otherwise parse them from --request
-    tags =parse_tags(args.tags) if args.tags else parse_request(args.request)
+    tags = parse_tags(args.tags) if args.tags else parse_request(args.request)
     print("tags:", tags, file=sys.stderr)
     model, _ = Pianist.load(args.model)
     performer = Performer(MLXBackend(model), tags, args.temperature, args.top_p, seed=args.seed)
