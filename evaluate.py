@@ -33,10 +33,22 @@ def held_out_loss(model, batches):
     return out
 
 
+def close_keys(key):
+    """The key itself, its relative major/minor and the keys a fifth up and down.
+
+    These share all but one note of their scale, so the key estimate often
+    confuses them."""
+    mode, tonic = divmod(T.KEYS.index(key), 12)    # KEYS: 12 majors, then 12 minors
+    relative = (1 - mode) * 12 + (tonic + (9 if mode == 0 else 3)) % 12
+    return {key, T.KEYS[relative],
+            T.KEYS[mode * 12 + (tonic + 7) % 12], T.KEYS[mode * 12 + (tonic + 5) % 12]}
+
+
 def tag_adherence(model, category, n_samples=8, n_notes=120, seed=0):
     """Ask for each value of one tag, measure the tag of what comes out.
 
-    Returns (exact match rate, rate within one step for ordered tags)."""
+    Returns (exact match rate, near rate): near is within one step for
+    ordered tags, and a close key (see close_keys) for the key tag."""
     values = T.TAG_VALUES[category]
     exact = near = n = 0
     for vi, value in enumerate(values):
@@ -47,7 +59,10 @@ def tag_adherence(model, category, n_samples=8, n_notes=120, seed=0):
                 continue
             got = compute_tags(notes)[category]
             exact += got == value
-            near += abs(values.index(got) - vi) <= 1
+            if category == "key":
+                near += got in close_keys(value)
+            else:
+                near += abs(values.index(got) - vi) <= 1
             n += 1
     return exact / n, near / n
 
@@ -73,12 +88,13 @@ def main():
         print(f"  {k:<9} {v:.3f}   perplexity {np.exp(v):6.1f}")
 
     print("\ntag adherence (generate with one tag, measure the result)")
-    print(f"  {'tag':<9} {'exact':>6} {'within 1':>9} {'chance':>7}")
+    print(f"  {'tag':<9} {'exact':>6} {'near':>6} {'chance':>7}")
     for cat in ["density", "dynamics", "register"] + (["key"] if args.keys else []):
         exact, near = tag_adherence(model, cat, args.samples)
         chance = 1 / len(T.TAG_VALUES[cat])
-        near_s = f"{near:9.0%}" if cat != "key" else f"{'-':>9}"
-        print(f"  {cat:<9} {exact:6.0%} {near_s} {chance:7.0%}")
+        print(f"  {cat:<9} {exact:6.0%} {near:6.0%} {chance:7.0%}")
+    print("  near: within one step; for key, the same, relative or a fifth-related key"
+          + (f" (chance {4 / len(T.KEYS):.0%})" if args.keys else ""))
 
 
 if __name__ == "__main__":

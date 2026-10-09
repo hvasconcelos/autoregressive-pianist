@@ -202,9 +202,24 @@ This prints:
 1. **Held-out loss** for each token family (pitch, velocity, duration, shift) and
    overall, with perplexity. Use `--split test` for the final number.
 2. **Tag adherence**: the model generates with each value of `density`, `dynamics`
-   and `register`, measures what it actually played, and reports the exact-match
-   rate and within-one rate next to the chance rate. Add `--keys` to also test all
-   24 keys (slow).
+   and `register`, measures what it actually played, and reports two rates next
+   to the chance rate:
+   - **exact**: the measured value equals the one requested.
+   - **near**: the measured value is within one step of the request (for
+     example `p` when `pp` was asked for).
+
+   Add `--keys` to also test all 24 keys (slow). For keys, **near** counts the
+   requested key, its relative major or minor, and the keys a fifth up and down.
+   For C major, that's C major, A minor, G major and F major. These keys share
+   all but one note of their scale, so the key estimate in `tags.py` often
+   confuses them. Chance is 4% for exact and 17% for near. A high near rate with
+   a low exact rate means the model plays in the right key family. A low near
+   rate means it isn't following the key.
+
+   The tag test generates fresh music with fixed seeds and doesn't use the
+   dataset, so `--split` changes only the loss, never these rates. Each value is
+   tried `--samples` times (default 8), so expect ±10% noise. Use `--samples 32`
+   when comparing two models.
 
 ## 7. Generate music
 
