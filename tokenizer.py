@@ -25,6 +25,8 @@ TAG_VALUES = {
     "composer": ["bach", "haydn", "mozart", "beethoven", "schubert", "chopin",
                  "schumann", "liszt", "mendelssohn", "brahms", "rachmaninoff",
                  "scriabin", "debussy", "ravel"],
+    # MAESTRO is all classical; the rest come from Aria-MIDI's metadata (tags.aria_tags)
+    "genre":    ["classical", "jazz", "pop", "film", "ragtime", "other"],
 }
 TAG_ORDER = list(TAG_VALUES)            # tags always appear in this order
 TAGS = [f"<{k}:{v}>" for k in TAG_ORDER for v in TAG_VALUES[k]]

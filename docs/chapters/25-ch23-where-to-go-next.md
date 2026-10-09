@@ -2,7 +2,7 @@
 
 ## 23.1 More data
 
-The single most effective improvement to either model is more music. Aria-MIDI's deduplicated subset has 371,053 piano files across many genres, against MAESTRO's 962 training performances. Its files are transcriptions and so are a little less clean, and it brings jazz, pop and film music that MAESTRO lacks. `prepare.py` needs only a different way to list the files; the rest of the pipeline is unchanged. With that much data, raise the model size as well: more layers and a wider vector, in that order.
+The single most effective improvement to either model is more music. Aria-MIDI's deduplicated subset has 371,053 piano files across many genres, against MAESTRO's 962 training performances. Its files are transcriptions and so are a little less clean, and it brings jazz, pop and film music that MAESTRO lacks. Appendix D does this: it prepares a genre-balanced slice of about ten times MAESTRO, with its own train, validation and test sets, adds a genre tag, and trains on both datasets. The rest of the pipeline is unchanged. With much more data than that, raise the model size as well: more layers and a wider vector, in that order.
 
 ## 23.2 Longer memory
 

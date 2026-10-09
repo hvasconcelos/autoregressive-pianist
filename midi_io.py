@@ -7,9 +7,10 @@ import numpy as np
 
 
 def load_notes(path, use_pedal=True):
-    """MIDI file -> note array. With use_pedal, notes released while the
-    sustain pedal is down keep sounding until the pedal comes up, so the
-    duration is the time the string actually rings."""
+    """MIDI file (a path or an open binary file) -> note array. With
+    use_pedal, notes released while the sustain pedal is down keep sounding
+    until the pedal comes up, so the duration is the time the string
+    actually rings."""
     now = 0.0
     pedal = False
     active = {}        # pitch -> (onset, velocity): key is held down
@@ -22,7 +23,8 @@ def load_notes(path, use_pedal=True):
             on, vel = store.pop(pitch)
             notes.append((on, pitch, vel, max(now - on, 0.01)))
 
-    for msg in mido.MidiFile(path):            # msg.time is seconds since last
+    midi = mido.MidiFile(path) if isinstance(path, str) else mido.MidiFile(file=path)
+    for msg in midi:                           # msg.time is seconds since last
         now += msg.time
         if msg.type == "note_on" and msg.velocity > 0:
             end(active, msg.note); end(sustained, msg.note)   # re-struck key

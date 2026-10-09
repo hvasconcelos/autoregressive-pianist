@@ -18,16 +18,21 @@ def drop_tags(tags, rng):
 
 
 class Dataset:
-    """One split written by prepare.py: every note of every piece in one array.
+    """One or more splits written by prepare.py / prepare_aria.py, as one array.
 
-    Piece i is notes[offsets[i]:offsets[i + 1]]; meta[i] holds its composer tags."""
+    Piece i is notes[offsets[i]:offsets[i + 1]]; meta[i] holds its fixed tags
+    (genre, era, composer). `paths` is one .npz path or a list of them."""
 
-    def __init__(self, path):
-        z = np.load(path)
-        self.notes = z["notes"].astype(np.float64)
-        self.offsets = z["offsets"]
-        self.meta = json.loads(str(z["meta"]))
-        self.sizes = np.diff(self.offsets)    # notes per piece
+    def __init__(self, paths):
+        notes, sizes, self.meta = [], [], []
+        for path in [paths] if isinstance(paths, str) else paths:
+            z = np.load(path)
+            notes.append(z["notes"].astype(np.float32))       # float32 halves the RAM
+            sizes.append(np.diff(z["offsets"]))
+            self.meta += json.loads(str(z["meta"]))
+        self.notes = np.concatenate(notes)
+        self.sizes = np.concatenate(sizes)    # notes per piece
+        self.offsets = np.concatenate([[0], np.cumsum(self.sizes)])
 
     def __len__(self):
         return len(self.sizes)
@@ -48,7 +53,7 @@ class Dataset:
         last_start = max(len(piece) - n, 0)
         start = last_start if rng.random() < 0.03 else rng.integers(0, last_start + 1)
         at_end = start == last_start               # 3 % of passages are endings
-        notes = piece[start:start + n].copy()
+        notes = piece[start:start + n].astype(np.float64)
         if augment:                                # small random variations
             lo, hi = notes[:, 1].min(), notes[:, 1].max()
             # up to 3 semitones either way, staying on the keyboard
@@ -72,7 +77,7 @@ class Dataset:
             notes = notes[-n_kept:] if at_end else notes[:n_kept]
 
         tags = compute_tags(notes)                 # measured on what is kept
-        tags.update({k: self.meta[i][k] for k in ("era", "composer") if k in self.meta[i]})
+        tags.update({k: self.meta[i][k] for k in ("genre", "era", "composer") if k in self.meta[i]})
         if tag_dropout:
             tags = drop_tags(tags, rng)
         return tags, music + ([T.EOS] if at_end else [])
@@ -83,7 +88,7 @@ class Dataset:
         The mask is 1 where the target is a music token (or <eos>): the loss
         ignores padding and does not ask the model to predict the tags."""
         x = np.full((batch_size, ctx), T.PAD, dtype=np.int32)
-        prefix = len(T.TAG_ORDER) + 2              # <bos>, up to six tags, <sep>
+        prefix = len(T.TAG_ORDER) + 2              # <bos>, one tag per category, <sep>
         for b in range(batch_size):
             tags, music = self.passage(rng, ctx - prefix, **kw)
             ids = T.encode_tags(tags) + music

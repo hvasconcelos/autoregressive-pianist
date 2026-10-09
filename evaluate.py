@@ -1,6 +1,6 @@
 """Measure a trained model: loss on held-out music, and whether it obeys tags.
 
-    uv run python evaluate.py --model runs/v1/best --data data/prepared
+    uv run python evaluate.py --model runs/v1/best --data data/maestro_prepared
 """
 import argparse, os
 import numpy as np
@@ -71,7 +71,7 @@ def main():
     """Print held-out loss per token family, then tag adherence."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="runs/v1/best")
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", default="data/maestro_prepared")
     ap.add_argument("--split", default="validation")
     ap.add_argument("--batches", type=int, default=20)
     ap.add_argument("--batch", type=int, default=16)

@@ -121,7 +121,7 @@ prepare.py
 ``` python
 """Turn the MAESTRO MIDI files into three compact files of note arrays.
 
-    python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
+    python prepare.py --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
 
 Writes train.npz, validation.npz and test.npz. Each holds every note of the
 split in one big array, plus where each piece starts and its composer tags.
@@ -135,7 +135,7 @@ from tags import composer_tags
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--maestro", required=True, help="folder with maestro-v3.0.0.csv")
-    ap.add_argument("--out", default="data/prepared")
+    ap.add_argument("--out", default="data/maestro_prepared")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -177,7 +177,7 @@ if __name__ == "__main__":
 Run it:
 
 ``` bash
-python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
+python prepare.py --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
 ```
 
 It prints one line per split with the number of pieces, notes and hours. Compare them with the table in chapter 5. The hours should be close to MAESTRO's figures, and the note counts close to 5.66, 0.64 and 0.74 million.
@@ -193,7 +193,7 @@ stats.py
 ``` python
 """Show how the tags are distributed in a prepared split.
 
-    python stats.py --data data/prepared
+    python stats.py --data data/maestro_prepared
 
 Use it to check that every tag value has a healthy share of the data
 before you train. If one value is almost empty, move the thresholds
@@ -207,7 +207,7 @@ from data import Dataset
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", default="data/maestro_prepared")
     ap.add_argument("--split", default="train")
     ap.add_argument("--passages", type=int, default=2000)
     args = ap.parse_args()
@@ -241,7 +241,7 @@ if __name__ == "__main__":
 ```
 
 ``` bash
-python stats.py --data data/prepared
+python stats.py --data data/maestro_prepared
 ```
 
 The script draws 2,000 random passages and prints, for each tag, what share of them got each value, as a bar of `#` characters. Look for two things.

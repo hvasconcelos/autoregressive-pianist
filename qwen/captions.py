@@ -22,6 +22,9 @@ WORDS = {
                  "high": ["high on the keyboard", "in the bright upper register"]},
     "era": {"baroque": ["baroque"], "classical": ["classical-era"],
             "romantic": ["romantic"], "modern": ["early modern"]},
+    "genre": {"classical": ["classical"], "jazz": ["jazz", "jazzy"], "pop": ["pop"],
+              "film": ["cinematic", "film-score"], "ragtime": ["ragtime"],
+              "other": []},
 }
 # {adj} is the joined adjectives, {Adj} the same capitalised, {A} its article
 OPENERS = ["{A} {adj} piano piece", "Piano music, {adj}", "Play something {adj}",
@@ -46,7 +49,8 @@ def key_words(key, rng):
 def caption(tags, rng):
     """tags dict -> a sentence. Missing tags are simply not mentioned."""
     pick = lambda options: options[rng.integers(len(options))]
-    adjs = [pick(WORDS[k][tags[k]]) for k in ("density", "dynamics", "era") if k in tags]
+    adjs = [pick(WORDS[k][tags[k]]) for k in ("density", "dynamics", "era", "genre")
+            if WORDS[k].get(tags.get(k))]           # "other" genre has no words
     rng.shuffle(adjs)                        # vary the word order too
     if adjs:
         adj = ", ".join(adjs)

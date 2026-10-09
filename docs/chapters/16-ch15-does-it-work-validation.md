@@ -11,7 +11,7 @@ evaluate.py
 ``` python
 """Measure a trained model: loss on held-out music, and whether it obeys tags.
 
-    python evaluate.py --model runs/v1/best --data data/prepared
+    python evaluate.py --model runs/v1/best --data data/maestro_prepared
 """
 import argparse, os
 import numpy as np
@@ -65,7 +65,7 @@ def tag_adherence(model, category, n_samples=8, n_notes=120, seed=0):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="runs/v1/best")
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", default="data/maestro_prepared")
     ap.add_argument("--split", default="validation")
     ap.add_argument("--batches", type=int, default=20)
     ap.add_argument("--batch", type=int, default=16)
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 ```
 
 ``` bash
-python evaluate.py --model runs/v1/best --data data/prepared
+python evaluate.py --model runs/v1/best --data data/maestro_prepared
 ```
 
 It prints two tables.

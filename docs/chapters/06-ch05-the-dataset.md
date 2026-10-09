@@ -22,13 +22,13 @@ The licence is Creative Commons Attribution Non-Commercial Share-Alike 4.0. You 
 You only need the MIDI files, which are a 56 MB download:
 
 ``` bash
-mkdir -p data && cd data
+mkdir -p data/maestro && cd data/maestro
 curl -O https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0-midi.zip
 unzip -q maestro-v3.0.0-midi.zip
-cd ..
+cd ../..
 ```
 
-This creates `data/maestro-v3.0.0/`, with one folder per competition year and a file called `maestro-v3.0.0.csv` that describes every performance. The columns we use are:
+This creates `data/maestro/maestro-v3.0.0/`, with one folder per competition year and a file called `maestro-v3.0.0.csv` that describes every performance. The columns we use are:
 
 | Column | Example | Used for |
 |----|----|----|
@@ -39,7 +39,7 @@ This creates `data/maestro-v3.0.0/`, with one folder per competition year and a 
 
 ## 5.3 Other datasets you may want later
 
-Start with MAESTRO alone. When you want more variety, these are the natural next steps.
+Start with MAESTRO alone. When you want more variety, these are the natural next steps. Appendix D shows how to add Aria-MIDI.
 
 | Dataset | Size | What it is | Licence |
 |----|----|----|----|

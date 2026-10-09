@@ -7,7 +7,7 @@ qwen/train_qwen.py
 ``` python
 """Fine-tune a small Qwen to continue a caption with piano music.
 
-    python qwen/train_qwen.py --data data/prepared --out runs/qwen
+    python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen
 """
 import argparse, math, os, time
 import numpy as np
@@ -19,7 +19,7 @@ from data import Dataset
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="Qwen/Qwen3-0.6B-Base")
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", default="data/maestro_prepared")
     ap.add_argument("--out", default="runs/qwen")
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--batch", type=int, default=16)
@@ -135,7 +135,7 @@ The structure mirrors `train.py` from Part I. The differences are these.
 Do a two-minute check first:
 
 ``` bash
-python qwen/train_qwen.py --data data/prepared --out runs/qwen_test \
+python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen_test \
     --steps 60 --batch 4 --warmup 10 --eval-every 20 --eval-batches 2
 ```
 
@@ -144,7 +144,7 @@ The first line must say `torch.float32`. The first loss printed should be around
 Then start the real run:
 
 ``` bash
-nohup python qwen/train_qwen.py --data data/prepared --out runs/qwen > qwen.log 2>&1 &
+nohup python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen > qwen.log 2>&1 &
 tail -f qwen.log
 ```
 

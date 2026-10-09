@@ -1,9 +1,10 @@
 """Turn the MAESTRO MIDI files into three compact files of note arrays.
 
-    uv run python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
+    uv run python prepare.py --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
 
 Writes train.npz, validation.npz and test.npz. Each holds every note of the
-split in one big array, plus where each piece starts and its composer tags.
+split in one big array, plus where each piece starts and its fixed tags
+(genre, era, composer).
 """
 import argparse, csv, json, os
 import numpy as np
@@ -14,8 +15,9 @@ from tags import composer_tags
 def main():
     """Read the MAESTRO csv, load every MIDI file and write one .npz per split."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--maestro", required=True, help="folder with maestro-v3.0.0.csv")
-    ap.add_argument("--out", default="data/prepared")
+    ap.add_argument("--maestro", default="data/maestro/maestro-v3.0.0",
+                    help="folder with maestro-v3.0.0.csv")
+    ap.add_argument("--out", default="data/maestro_prepared")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -34,7 +36,7 @@ def main():
             notes = notes[keep]
             if len(notes) < 64:
                 continue
-            tags = composer_tags(row["canonical_composer"])
+            tags = {"genre": "classical", **composer_tags(row["canonical_composer"])}
             if "era" not in tags:
                 unknown.add(row["canonical_composer"])
             pieces.append(notes.astype(np.float32))

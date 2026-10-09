@@ -1,6 +1,6 @@
 """Fine-tune a small Qwen to continue a caption with piano music.
 
-    uv run python qwen/train_qwen.py --data data/prepared --out runs/qwen
+    uv run python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen
 """
 import argparse, math, os, time
 import numpy as np
@@ -12,7 +12,7 @@ from data import Dataset
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="Qwen/Qwen3-0.6B-Base")
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", default="data/maestro_prepared")
     ap.add_argument("--out", default="runs/qwen")
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--batch", type=int, default=16)

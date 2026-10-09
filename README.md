@@ -11,21 +11,35 @@ Training runs on Apple Silicon with [MLX](https://github.com/ml-explore/mlx).
 ## Pipeline at a glance
 
 ```
-MAESTRO MIDI ──prepare.py──▶ data/prepared/*.npz ──train.py──▶ runs/v1/best.*
-                                   │                               │
-                               stats.py                 evaluate.py / sample.py / play.py
+data/maestro ──prepare.py──────▶ data/maestro_prepared ─┐
+data/aria    ──prepare_aria.py──▶ data/aria_prepared ────┴─train.py──▶ runs/v2/best.*
+                                        │                                  │
+                                    stats.py                 evaluate.py / sample.py / play.py
 ```
 
 | Script             | What it does                                                    |
 |--------------------|-----------------------------------------------------------------|
 | `make_toy_data.py` | Writes a small fake MAESTRO-style dataset for smoke tests        |
 | `prepare.py`       | Converts MAESTRO MIDI into `train/validation/test.npz`           |
+| `prepare_aria.py`  | Picks a balanced, high-quality slice of Aria-MIDI and converts it the same way |
 | `stats.py`         | Shows how tag values are spread across a prepared split          |
 | `train.py`         | Trains the model and saves `best` and `last` checkpoints         |
 | `evaluate.py`      | Reports held-out loss per token family and how well tags are followed |
 | `sample.py`        | Generates a performance into a `.mid` file                      |
 | `play.py`          | Plays in real time on a MIDI port and takes new requests as you type |
 | `request.py`       | Turns a plain-words request into tags (handy for checking)       |
+
+Each dataset has a raw folder and a prepared folder next to it in `data/`:
+
+```
+data/
+  maestro/            maestro-v3.0.0-midi.zip and the unzipped maestro-v3.0.0/
+  maestro_prepared/   train.npz, validation.npz, test.npz
+  aria/               aria-midi-v1-deduped-ext.tar.gz (read without unpacking)
+  aria_prepared/      train.npz, validation.npz, test.npz
+  toy/                fake MAESTRO-style data from make_toy_data.py
+  toy_prepared/       train.npz, validation.npz, test.npz
+```
 
 ## 1. Setup
 
@@ -66,39 +80,80 @@ Validation loss should drop from about 2.5 to about 1.9.
 
 ## 3. Get MAESTRO
 
-Download the MIDI-only version of MAESTRO v3.0.0 (about 57 MB) and unzip it into `data/`:
+Download the MIDI-only version of MAESTRO v3.0.0 (about 57 MB) and unzip it into `data/maestro/`:
 
 ```bash
-mkdir -p data
-curl -L -o data/maestro-v3.0.0-midi.zip \
+mkdir -p data/maestro
+curl -L -o data/maestro/maestro-v3.0.0-midi.zip \
   https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0-midi.zip
-unzip -q data/maestro-v3.0.0-midi.zip -d data
+unzip -q data/maestro/maestro-v3.0.0-midi.zip -d data/maestro
 ```
 
-You should now have `data/maestro-v3.0.0/maestro-v3.0.0.csv` and one folder per
+You should now have `data/maestro/maestro-v3.0.0/maestro-v3.0.0.csv` and one folder per
 year (`2004/`, `2006/`, ...).
 
 ## 4. Prepare the data
 
 ```bash
-uv run python prepare.py --maestro data/maestro-v3.0.0 --out data/prepared
+uv run python prepare.py --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
 ```
 
 This reads every performance, keeps the 88 piano keys, drops fragments with fewer
 than 64 notes, attaches composer and era tags, and writes `train.npz`,
-`validation.npz` and `test.npz` to `data/prepared/`. It uses MAESTRO's own
+`validation.npz` and `test.npz` to `data/maestro_prepared/`. It uses MAESTRO's own
 train/validation/test split. Any composers it can't place in an era are printed
 at the end; you can add them to the table in `tags.py`.
 
 Optional: check that every tag value has a fair share of the data.
 
 ```bash
-uv run python stats.py --data data/prepared --split train
+uv run python stats.py --data data/maestro_prepared --split train
 ```
 
 If one value is almost empty, adjust the bucket thresholds in `tags.py`. These
 tags are measured when batches are built, so you don't need to run `prepare.py`
 again (you do if you change the `ERA` table).
+
+## 4b. Add Aria-MIDI (optional, more data and a genre tag)
+
+[Aria-MIDI](https://huggingface.co/datasets/loubb/aria-midi) is solo piano
+transcribed from recordings (CC BY-NC-SA 4.0). It adds genres that MAESTRO
+lacks, such as jazz, pop, film music and ragtime. Download the deduplicated subset
+(2.0 GB, 371,053 files):
+
+```bash
+hf download loubb/aria-midi aria-midi-v1-deduped-ext.tar.gz --repo-type dataset --local-dir data/aria
+uv run python prepare_aria.py --archive data/aria/aria-midi-v1-deduped-ext.tar.gz --out data/aria_prepared
+```
+
+`prepare_aria.py` reads the archive directly, so there's no need to unpack it.
+It picks files using each recording's audio-quality score, best first. It
+takes one file from each genre in turn, so small genres aren't crowded out, and
+stops at `--notes` (default 55M, about 10× MAESTRO). Of the picked
+recordings, one in `--hold-out` (100) goes to `validation.npz` and another
+one in 100 to `test.npz`. Both are chosen by recording ID, so the split is
+the same on every run and every genre is represented. Files without a genre
+label are skipped.
+
+Aria's genre labels map onto the `genre` tag like this:
+
+| Aria label | `genre` tag |
+|---|---|
+| classical, atonal | `classical` |
+| pop, rock | `pop` |
+| soundtrack | `film` |
+| jazz, blues | `jazz` |
+| ragtime | `ragtime` |
+| folk, ambient | `other` |
+
+All MAESTRO pieces are tagged `classical`, so run `prepare.py` again after
+updating to get the genre tag on them. For classical Aria files, era and
+composer come from the composer's name as for MAESTRO, falling back to Aria's
+`music_period`. Other genres get no era or composer. The mapping is in `tags.py`
+(`GENRE`, `PERIOD`, `aria_tags`).
+
+Adding the genre tag changes the vocabulary from 459 to 465 tokens, so v1
+checkpoints can't be resumed with this code. Train a new model.
 
 ## 5. Train
 
@@ -106,7 +161,7 @@ The defaults are the full model: 6 layers, width 512, 8 heads, 1024-token contex
 batch 32, 20,000 steps.
 
 ```bash
-uv run python train.py --data data/prepared --out runs/v1
+uv run python train.py --data data/maestro_prepared --out runs/v1
 ```
 
 ### Macs with 16 GB of memory or less: use `--batch 8`
@@ -117,7 +172,7 @@ backprop. On a 16 GB Mac the run starts swapping and never prints a progress
 line. Use a smaller batch instead:
 
 ```bash
-uv run python train.py --data data/prepared --out runs/v1 --batch 8
+uv run python train.py --data data/maestro_prepared --out runs/v1 --batch 8
 ```
 
 This needs roughly 4 GB. `--batch 16` (about 7 GB) may work if you close other
@@ -156,7 +211,7 @@ If training stops, run the same command again with `--resume`. Training picks up
 from `runs/v1/last` and continues the step count, LR schedule and log file:
 
 ```bash
-uv run python train.py --data data/prepared --out runs/v1 --resume
+uv run python train.py --data data/maestro_prepared --out runs/v1 --resume
 ```
 
 Only the optimiser's step counter is restored; its momentum buffers start fresh.
@@ -165,7 +220,7 @@ Only the optimiser's step counter is restored; its momentum buffers start fresh.
 
 | Flag             | Default         | Meaning                                         |
 |------------------|-----------------|-------------------------------------------------|
-| `--data`         | `data/prepared` | Folder with `train.npz` and `validation.npz`    |
+| `--data`         | `data/maestro_prepared` | One or more folders. Training uses all their `train.npz` files; validation uses the first folder's `validation.npz` |
 | `--out`          | `runs/v1`       | Folder for checkpoints and `log.csv`            |
 | `--steps`        | `20000`         | Total optimiser updates                         |
 | `--batch`        | `32`            | Passages per batch                              |
@@ -194,7 +249,7 @@ Only the optimiser's step counter is restored; its momentum buffers start fresh.
 ## 6. Evaluate
 
 ```bash
-uv run python evaluate.py --model runs/v1/best --data data/prepared
+uv run python evaluate.py --model runs/v1/best --data data/maestro_prepared
 ```
 
 This prints:
@@ -249,6 +304,7 @@ Available tag values:
 | `register` | `low`, `mid`, `high` |
 | `key`      | `Cmaj` … `Bmaj`, `Cmin` … `Bmin` (flats spelled `Db`, `Eb`, `Gb`, `Ab`, `Bb`) |
 | `era`      | `baroque`, `classical`, `romantic`, `modern` |
+| `genre`    | `classical`, `jazz`, `pop`, `film`, `ragtime`, `other` |
 | `composer` | `bach`, `haydn`, `mozart`, `beethoven`, `schubert`, `chopin`, `schumann`, `liszt`, `mendelssohn`, `brahms`, `rachmaninoff`, `scriabin`, `debussy`, `ravel` |
 
 ## 8. Play in real time
@@ -273,14 +329,19 @@ has to be faster than the music for `play.py` to keep up. If it isn't, raise
 uv venv --python 3.12
 uv pip install mlx numpy mido python-rtmidi
 
-curl -L -o data/maestro-v3.0.0-midi.zip --create-dirs \
+curl -L -o data/maestro/maestro-v3.0.0-midi.zip --create-dirs \
   https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0-midi.zip
-unzip -q data/maestro-v3.0.0-midi.zip -d data
+unzip -q data/maestro/maestro-v3.0.0-midi.zip -d data/maestro
 
-uv run python prepare.py  --maestro data/maestro-v3.0.0 --out data/prepared
-uv run python stats.py    --data data/prepared
-uv run python train.py    --data data/prepared --out runs/v1 --batch 8  # add --resume to continue
-uv run python evaluate.py --model runs/v1/best --data data/prepared --split test
+uv run python prepare.py  --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
+uv run python stats.py    --data data/maestro_prepared
+uv run python train.py    --data data/maestro_prepared --out runs/v1 --batch 8  # add --resume to continue
+
+# optional: add Aria-MIDI and the genre tag
+hf download loubb/aria-midi aria-midi-v1-deduped-ext.tar.gz --repo-type dataset --local-dir data/aria
+uv run python prepare_aria.py --out data/aria_prepared
+uv run python train.py    --data data/maestro_prepared data/aria_prepared --out runs/v2 --batch 8
+uv run python evaluate.py --model runs/v1/best --data data/maestro_prepared --split test
 uv run python sample.py   --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
 ```
 

@@ -9,7 +9,7 @@ train.py
 ``` python
 """Train the model.
 
-    python train.py --data data/prepared --out runs/v1
+    python train.py --data data/maestro_prepared --out runs/v1
 """
 import argparse, math, os, time
 from functools import partial
@@ -38,7 +38,7 @@ def evaluate(model, batches):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", default="data/maestro_prepared")
     ap.add_argument("--out", default="runs/v1")
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--batch", type=int, default=32)
@@ -153,7 +153,7 @@ The call to `mx.compile` turns the whole step into a single optimised graph. The
 ## 11.2 Start training
 
 ``` bash
-python train.py --data data/prepared --out runs/v1
+python train.py --data data/maestro_prepared --out runs/v1
 ```
 
 The first lines look like this:
@@ -186,13 +186,13 @@ This book's code was not run on Apple silicon, so the table tells you how to con
 Keep the Mac plugged in and stop it from sleeping while training runs. Running the command through `caffeinate` does that:
 
 ``` bash
-caffeinate -i python train.py --data data/prepared --out runs/v1
+caffeinate -i python train.py --data data/maestro_prepared --out runs/v1
 ```
 
 If training is interrupted, continue from the last save with:
 
 ``` bash
-python train.py --data data/prepared --out runs/v1 --resume
+python train.py --data data/maestro_prepared --out runs/v1 --resume
 ```
 
 Resuming restores the model and the position in the learning-rate schedule. It does not restore the optimiser's running averages, which rebuild themselves within a few hundred steps. You may see the loss tick up briefly after a resume for that reason.

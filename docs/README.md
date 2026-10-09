@@ -10,6 +10,7 @@ docs/
   chapters/      one Markdown file per chapter, part divider or appendix
   build.py       builds the EPUB with pandoc
   build/         output (git-ignored)
+  results/       measured results of real runs, for comparing models (not part of the book)
 ```
 
 ## Build

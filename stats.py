@@ -1,6 +1,6 @@
 """Show how the tags are distributed in a prepared split.
 
-    uv run python stats.py --data data/prepared
+    uv run python stats.py --data data/maestro_prepared
 
 Use it to check that every tag value has a healthy share of the data
 before you train. If one value is almost empty, move the thresholds
@@ -15,7 +15,7 @@ from data import Dataset
 def main():
     """Sample passages the way training does (no augmentation) and count tags."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", default="data/maestro_prepared")
     ap.add_argument("--split", default="train")
     ap.add_argument("--passages", type=int, default=2000)
     args = ap.parse_args()

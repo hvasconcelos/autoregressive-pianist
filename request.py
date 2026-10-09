@@ -28,6 +28,12 @@ KEYWORDS = {
                  "high": ["high", "bright", "sparkl", "treble", "music box"]},
     "era": {"baroque": ["baroque"], "classical": ["classical era", "classical style"],
             "romantic": ["romantic"], "modern": ["modern", "impressionis", "20th"]},
+    "genre": {"classical": ["classical"],
+              "jazz": ["jazz", "swing", "bebop", "blues", "bossa"],
+              "pop": ["pop", "rock"],
+              "film": ["film", "movie", "soundtrack", "cinematic"],
+              "ragtime": ["ragtime", "stride"],
+              "other": ["folk", "ambient"]},
 }
 # when no key is named, a mood word suggests one
 MOOD_KEYS = {"sad": "Amin", "melanchol": "Dmin", "dark": "Cmin",

@@ -22,6 +22,15 @@ ERA = {"baroque": ["bach", "handel", "scarlatti", "rameau", "couperin", "purcell
                   "bartok", "berg", "medtner", "janacek", "albeniz", "stravinsky",
                   "shostakovich", "busoni", "kapustin", "szymanowski"]}
 
+# Aria-MIDI's genre labels -> our genre tag. Labels not listed get no genre.
+GENRE = {"classical": "classical", "atonal": "classical", "pop": "pop", "rock": "pop",
+         "soundtrack": "film", "jazz": "jazz", "blues": "jazz", "ragtime": "ragtime",
+         "folk": "other", "ambient": "other"}
+# Aria-MIDI's music_period -> era, used when the composer gives no era.
+# "contemporary" is left out: it labels new music of any style, not an era.
+PERIOD = {"baroque": "baroque", "classical": "classical", "romantic": "romantic",
+          "impressionist": "modern", "modern": "modern"}
+
 
 def estimate_key(notes):
     """Krumhansl-Schmuckler: correlate the passage's pitch-class histogram
@@ -68,4 +77,20 @@ def composer_tags(name):
                 if n in TAG_VALUES["composer"]:
                     out["composer"] = n
                 return out
+    return out
+
+
+def aria_tags(metadata):
+    """Aria-MIDI metadata dict -> fixed tags {'genre', 'era', 'composer'}.
+
+    Era and composer are only set for classical music, where they mean
+    what they mean for MAESTRO."""
+    genre = GENRE.get(metadata.get("genre"))
+    if genre is None:
+        return {}
+    out = {"genre": genre}
+    if genre == "classical":
+        out.update(composer_tags(metadata.get("composer", "")))
+        if "era" not in out and metadata.get("music_period") in PERIOD:
+            out["era"] = PERIOD[metadata["music_period"]]
     return out

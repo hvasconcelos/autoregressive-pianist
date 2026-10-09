@@ -1,6 +1,10 @@
 """Train the model.
 
-    uv run python train.py --data data/prepared --out runs/v1
+    uv run python train.py --data data/maestro_prepared --out runs/v1
+    uv run python train.py --data data/maestro_prepared data/aria_prepared --out runs/v2
+
+With several --data folders, training draws from all of their train.npz
+files; validation uses the first folder only, so losses stay comparable.
 """
 import argparse, math, os, time
 from functools import partial
@@ -31,7 +35,7 @@ def evaluate(model, batches):
 def main():
     """Parse arguments, build or resume the model, and run the training loop."""
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data", default="data/prepared")
+    ap.add_argument("--data", nargs="+", default=["data/maestro_prepared"])
     ap.add_argument("--out", default="runs/v1")
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--batch", type=int, default=32)
@@ -50,8 +54,8 @@ def main():
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
-    train = Dataset(os.path.join(args.data, "train.npz"))
-    val = fixed_batches(Dataset(os.path.join(args.data, "validation.npz")),
+    train = Dataset([os.path.join(d, "train.npz") for d in args.data])
+    val = fixed_batches(Dataset(os.path.join(args.data[0], "validation.npz")),
                         args.eval_batches, args.batch, args.ctx)
 
     last = os.path.join(args.out, "last")
