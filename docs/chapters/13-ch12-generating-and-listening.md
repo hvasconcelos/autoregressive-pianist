@@ -17,7 +17,7 @@ A Performer does not care which model is underneath. It talks to a
     start(request, music_tokens) -> logits for the next token
     step(token)                  -> logits for the token after that
 
-Logits are always a NumPy vector over OUR 459-token vocabulary, so the same
+Logits are always a NumPy vector over OUR 465-token vocabulary, so the same
 Performer drives the small MLX model (Part I) and Qwen (Part II).
 """
 import numpy as np
@@ -33,16 +33,24 @@ class MLXBackend:
         self.cache = None
 
     def start(self, request, music_tokens):
+        """Fresh context: tags, then the given music. Resets the key/value cache."""
         ids = T.encode_tags(request) + list(music_tokens)
         logits, self.cache = self.model(self.mx.array([ids]))   # one full pass
         return np.array(logits[0, -1])
 
     def step(self, token):
+        """Feed one token; reuses the cache, so only the new token is computed."""
         logits, self.cache = self.model(self.mx.array([[token]]), self.cache)
         return np.array(logits[0, -1])
 
 
 class Performer:
+    """Samples tokens one at a time and assembles them into notes.
+
+    The grammar in tokenizer.allowed_next keeps every note well formed.
+    With `endless`, <eos> is never sampled, and when the context fills up
+    the oldest music is dropped so generation can go on forever."""
+
     def __init__(self, backend, request, temperature=1.0, top_p=0.95,
                  endless=True, seed=None):
         self.backend, self.request = backend, request
@@ -56,7 +64,7 @@ class Performer:
     def _begin(self):
         """(Re)build the model's context: the request, then recent music."""
         self.logits = self.backend.start(self.request, self.music)
-        self.prev = self.music[-1] if self.music else T.SEP
+        self.prev = self.music[-1] if self.music else T.SEP   # for the grammar
         self.note = []
 
     def set_request(self, request):
@@ -76,6 +84,7 @@ class Performer:
         self.music = m
 
     def _sample(self):
+        """Pick the next token: grammar mask, temperature, then top-p."""
         mask = T.allowed_next(self.prev)
         if self.endless:
             mask[T.EOS] = False
@@ -90,6 +99,7 @@ class Performer:
     def step(self):
         """Generate exactly one token. Returns a finished note as
         (wait_ms, pitch, velocity, dur_ms), "end" at <eos>, or None."""
+        # room for the tag prefix (<bos>, tags, <sep>) plus a few spare tokens
         full = len(self.music) + len(T.TAG_ORDER) + 6 >= self.backend.ctx
         if full and T.kind(self.prev) in ("dur", "shift"):  # between two notes
             self._trim(keep=self.backend.ctx // 2)          # forget the oldest half
@@ -108,7 +118,7 @@ class Performer:
         elif k == "pitch":
             self.note = [tok - T.PITCH0 + T.PITCH_MIN]
         elif k == "vel":
-            self.note.append((tok - T.VEL0) * 4 + 2)
+            self.note.append((tok - T.VEL0) * 4 + 2)       # centre of the bin
         elif k == "dur":
             out = (self.shift_ms, self.note[0], self.note[1], int(T.DUR_GRID[tok - T.DUR0]))
             self.shift_ms = 0
@@ -169,6 +179,7 @@ from request import parse_request, parse_tags
 
 
 def main():
+    """Generate --notes notes for the request and save them as MIDI."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", default="runs/v1/best")
     ap.add_argument("--request", default="", help="plain words")
@@ -190,6 +201,7 @@ def main():
     save_notes(notes, args.out)
     music_s = (notes[-1, 0] + notes[-1, 3]) / 1000
     print(f"{len(notes)} notes, {music_s:.1f} s of music -> {args.out}")
+    # for real-time play (play.py) the first number must beat the second
     print(f"generated {p.n_tokens / dt:.0f} tokens/s; "
           f"this music needs {p.n_tokens / music_s:.0f} tokens/s")
 
@@ -199,8 +211,9 @@ if __name__ == "__main__":
 ```
 
 ``` bash
-python sample.py --model runs/v1/best --request "slow and quiet in D minor" --out slow.mid
-python sample.py --model runs/v1/best --tags density=dense,dynamics=ff,key=Cmaj --out loud.mid
+python sample.py --model runs/v2/best --request "slow and quiet in D minor" --out slow.mid
+python sample.py --model runs/v2/best --tags density=dense,dynamics=ff,key=Cmaj --out loud.mid
+python sample.py --model runs/v2/best --request "a jazzy ballad in F major" --out jazz.mid
 ```
 
 The script prints the tags it used, the number of notes, and two speeds:

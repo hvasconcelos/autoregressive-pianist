@@ -1,6 +1,9 @@
 """Fine-tune a small Qwen to continue a caption with piano music.
 
-    uv run python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen
+    uv run python qwen/train_qwen.py --data data/maestro_prepared data/aria_prepared --out runs/qwen
+
+With several --data folders, training draws from all of their train.npz
+files; validation uses the first folder only, as in train.py.
 """
 import argparse, math, os, time
 import numpy as np
@@ -12,7 +15,7 @@ from data import Dataset
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="Qwen/Qwen3-0.6B-Base")
-    ap.add_argument("--data", default="data/maestro_prepared")
+    ap.add_argument("--data", nargs="+", default=["data/maestro_prepared"])
     ap.add_argument("--out", default="runs/qwen")
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--batch", type=int, default=16)
@@ -35,8 +38,8 @@ def main():
     # The weights are kept in 32-bit floats for training. Qwen ships in
     # bfloat16, which is too coarse to absorb small optimiser updates.
     model, tok, base = load(last if resume else args.base, device, torch.float32)
-    train = Dataset(os.path.join(args.data, "train.npz"))
-    val_ds = Dataset(os.path.join(args.data, "validation.npz"))
+    train = Dataset([os.path.join(d, "train.npz") for d in args.data])
+    val_ds = Dataset(os.path.join(args.data[0], "validation.npz"))
     val_rng = np.random.default_rng(1234)
     # fixed validation batches, built once, so every evaluation sees the same music
     val = [make_batch(val_ds, tok, base, val_rng, args.batch, args.ctx,

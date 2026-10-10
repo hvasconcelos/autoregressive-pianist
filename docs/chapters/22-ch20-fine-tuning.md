@@ -7,7 +7,10 @@ qwen/train_qwen.py
 ``` python
 """Fine-tune a small Qwen to continue a caption with piano music.
 
-    python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen
+    python qwen/train_qwen.py --data data/maestro_prepared data/aria_prepared --out runs/qwen
+
+With several --data folders, training draws from all of their train.npz
+files; validation uses the first folder only, as in train.py.
 """
 import argparse, math, os, time
 import numpy as np
@@ -19,7 +22,7 @@ from data import Dataset
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="Qwen/Qwen3-0.6B-Base")
-    ap.add_argument("--data", default="data/maestro_prepared")
+    ap.add_argument("--data", nargs="+", default=["data/maestro_prepared"])
     ap.add_argument("--out", default="runs/qwen")
     ap.add_argument("--steps", type=int, default=20000)
     ap.add_argument("--batch", type=int, default=16)
@@ -36,14 +39,16 @@ def main():
     cuda = torch.cuda.is_available()
     device = "cuda" if cuda else "cpu"
     last = os.path.join(args.out, "last")
+    # resume only if a previous run left an optimiser state behind
     resume = args.resume and os.path.exists(os.path.join(last, "state.pt"))
 
     # The weights are kept in 32-bit floats for training. Qwen ships in
     # bfloat16, which is too coarse to absorb small optimiser updates.
     model, tok, base = load(last if resume else args.base, device, torch.float32)
-    train = Dataset(os.path.join(args.data, "train.npz"))
-    val_ds = Dataset(os.path.join(args.data, "validation.npz"))
+    train = Dataset([os.path.join(d, "train.npz") for d in args.data])
+    val_ds = Dataset(os.path.join(args.data[0], "validation.npz"))
     val_rng = np.random.default_rng(1234)
+    # fixed validation batches, built once, so every evaluation sees the same music
     val = [make_batch(val_ds, tok, base, val_rng, args.batch, args.ctx,
                       augment=False, tag_dropout=False) for _ in range(args.eval_batches)]
     n_params = sum(p.numel() for p in model.parameters())
@@ -73,6 +78,7 @@ def main():
 
     def run(batch):
         x, att, y = (t.to(device) for t in batch)
+        # on a GPU compute in bfloat16 while the weights stay in float32
         with torch.autocast("cuda", dtype=torch.bfloat16, enabled=cuda):
             return music_loss(model, base, x, att, y)
 
@@ -86,7 +92,7 @@ def main():
             batch = make_batch(train, tok, base, rng, args.batch, args.ctx)
             loss = run(batch)
             (loss / args.accumulate).backward()
-            seen += int(batch[1].sum())
+            seen += int(batch[1].sum())         # real (non-padding) tokens
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         opt.step()
         opt.zero_grad(set_to_none=True)
@@ -135,7 +141,7 @@ The structure mirrors `train.py` from Part I. The differences are these.
 Do a two-minute check first:
 
 ``` bash
-python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen_test \
+python qwen/train_qwen.py --data data/maestro_prepared data/aria_prepared --out runs/qwen_test \
     --steps 60 --batch 4 --warmup 10 --eval-every 20 --eval-batches 2
 ```
 
@@ -144,7 +150,7 @@ The first line must say `torch.float32`. The first loss printed should be around
 Then start the real run:
 
 ``` bash
-nohup python qwen/train_qwen.py --data data/maestro_prepared --out runs/qwen > qwen.log 2>&1 &
+nohup python qwen/train_qwen.py --data data/maestro_prepared data/aria_prepared --out runs/qwen > qwen.log 2>&1 &
 tail -f qwen.log
 ```
 
@@ -158,6 +164,8 @@ As in Part I, read the `tokens/s` figure after the first hundred steps and work 
 
 > hours = steps × batch × accumulate × 1,024 ÷ (tokens per second) ÷ 3,600
 
+The default 20,000 steps of 16 passages come to about 330 million tokens, roughly one and a half passes over the 227 million training tokens of MAESTRO and the Aria-MIDI slice together. That is a sensible first target: the larger model sees each passage only once or twice, so it has little chance to memorise them. If you train on MAESTRO alone, the same run is about fifteen passes and overfitting is likely; shorten it.
+
 ::: {.admonition .warning}
 No measured figure
 
@@ -166,8 +174,8 @@ This was not run on a DGX Spark. Expect each step to cost several tens of times 
 
 ## 20.3 What to watch
 
-The validation loss measures the same thing as the small model's, loss per music token on MAESTRO's validation split, so the small model's best figure is the number to beat. The two scripts draw different random passages, so treat a gap of less than about 0.05 as a tie.
+Like `train.py`, it trains on every folder given to `--data` and validates on the first. The validation loss therefore measures the same thing as the small model's, loss per music token on MAESTRO's validation split, so the small model's best figure is the number to beat. The two scripts draw different random passages, so treat a gap of less than about 0.05 as a tie.
 
 Expect the early part of the curve to look different from Part I. The small model started from random weights everywhere. Qwen starts with a capable body and 402 token rows that all look alike, so the first stretch of training is mostly the embeddings finding their places.
 
-Overfitting arrives sooner with a larger model on the same data. If the validation loss turns upwards early, the two effective responses are more data (the deduplicated Aria-MIDI subset is the obvious source) and a lower learning rate.
+Overfitting arrives sooner with a larger model on the same data. If the validation loss turns upwards early, the two effective responses are more data (a larger Aria-MIDI slice: raise `--notes` in chapter 7) and a lower learning rate.

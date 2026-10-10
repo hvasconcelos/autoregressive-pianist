@@ -1,4 +1,6 @@
-# 5. The dataset
+# 5. The datasets
+
+We train on two datasets that complement each other. MAESTRO is small and clean, and it is all classical. Aria-MIDI is large and varied, but less clean. Together they give the model accurate classical playing and a range of other styles.
 
 ## 5.1 MAESTRO
 
@@ -17,9 +19,53 @@ The repertoire is classical, from the 17th to the early 20th century, with a lot
 
 The licence is Creative Commons Attribution Non-Commercial Share-Alike 4.0. You may use it freely for research and personal projects. A commercial product would need different data.
 
-## 5.2 Download it
+## 5.2 Aria-MIDI
 
-You only need the MIDI files, which are a 56 MB download:
+Aria-MIDI is about 100,000 hours of solo piano: 1.19 million files, transcribed from recordings by a model that turns audio into MIDI. The recordings come from many sources and every genre, so it brings jazz, pop, film music and ragtime that MAESTRO lacks. The price is accuracy. A transcription has occasional wrong notes, and its velocities are estimated from the sound, not measured at the key.
+
+We use the **deduplicated subset**, which the dataset's authors filtered most heavily for training generative models: 371,053 files and a 2.0 GB download. Each file is one stretch of solo piano from one recording, named `<recording id>_<segment>.mid`. A file called `metadata.json` describes every recording, with labels extracted from its title and description, and an audio score from the classifier that judged whether the recording is clean solo piano:
+
+``` text
+"2": {"metadata": {"composer": "strauss", "form": "waltz", "performer": "cziffra",
+                   "genre": "classical", "music_period": "classical"},
+      "audio_scores": {"0": 0.9902}}
+```
+
+The genre labels across the subset:
+
+| Aria genre | Files |
+|----|---:|
+| classical | 112,946 |
+| *(none)* | 94,105 |
+| pop | 70,024 |
+| soundtrack | 54,912 |
+| jazz | 18,839 |
+| rock | 6,666 |
+| folk | 5,299 |
+| ambient | 3,561 |
+| ragtime | 3,319 |
+| blues | 1,248 |
+| atonal | 134 |
+
+We don't use all of it. The whole subset is about 100 times MAESTRO. Its note arrays would not fit in 16 GB of memory, and one pass over it would take days on an M1 Pro. Instead, chapter 7 picks a slice of about ten times MAESTRO: the best-scoring files of each genre, in equal numbers where the genre has enough. It also makes Aria's train, validation and test sets, which the dataset doesn't provide.
+
+Aria-MIDI has the same licence as MAESTRO, CC BY-NC-SA 4.0.
+
+## 5.3 Download them
+
+Each dataset gets a folder for the raw download, and later a `_prepared` folder beside it for the converted files:
+
+``` text
+data/
+  maestro/            maestro-v3.0.0-midi.zip and the unzipped maestro-v3.0.0/
+  maestro_prepared/   train.npz, validation.npz, test.npz   (chapter 7)
+  aria/               aria-midi-v1-deduped-ext.tar.gz
+  aria_prepared/      train.npz, validation.npz, test.npz   (chapter 7)
+  toy/                fake data for the smoke test          (chapter 10)
+  toy_prepared/       train.npz, validation.npz, test.npz   (chapter 10)
+```
+
+For MAESTRO you only need the MIDI files, which are a 56 MB download:
 
 ``` bash
 mkdir -p data/maestro && cd data/maestro
@@ -37,17 +83,23 @@ This creates `data/maestro/maestro-v3.0.0/`, with one folder per competition yea
 | `split` | train | Which file the performance goes into |
 | `midi_filename` | 2004/MIDI-Unprocessed\_...\_wav.midi | Where the notes are |
 
-## 5.3 Other datasets you may want later
+Aria-MIDI is published on Hugging Face. Download the deduplicated subset with the `hf` tool:
 
-Start with MAESTRO alone. When you want more variety, these are the natural next steps. Appendix D shows how to add Aria-MIDI.
+``` bash
+hf download loubb/aria-midi aria-midi-v1-deduped-ext.tar.gz \
+    --repo-type dataset --local-dir data/aria
+```
+
+Don't unpack it. Unpacked, it is several gigabytes spread over 371,053 small files. Chapter 7 reads the archive directly.
+
+## 5.4 Other datasets you may want later
 
 | Dataset | Size | What it is | Licence |
 |----|----|----|----|
-| MAESTRO v3 | 199 hours, 1,276 performances | Recorded directly from concert grands. The cleanest timing and velocity data available. | CC BY-NC-SA 4.0 |
-| Aria-MIDI | About 100,000 hours, 1.19 million files | Piano recordings of all genres, turned into MIDI by a transcription model. Much larger and more varied, with some transcription errors. A deduplicated subset of 371,053 files is provided for training generative models. | CC BY-NC-SA 4.0 |
+| Aria-MIDI, pruned or full | 820,944 or 1,186,253 files | The larger Aria-MIDI subsets: less filtered and with more near-duplicates. For a bigger model on bigger hardware. | CC BY-NC-SA 4.0 |
 | MidiCaps | 168,000 files | Multi-instrument MIDI files from the Lakh collection, each with a written description, genre, mood, key and tempo. Useful for Part II. These are scores for bands, not piano performances. | CC BY-SA 4.0 |
 
-## 5.4 Reading and writing MIDI
+## 5.5 Reading and writing MIDI
 
 The first file of the project converts between MIDI files and note arrays.
 
@@ -65,9 +117,10 @@ import numpy as np
 
 
 def load_notes(path, use_pedal=True):
-    """MIDI file -> note array. With use_pedal, notes released while the
-    sustain pedal is down keep sounding until the pedal comes up, so the
-    duration is the time the string actually rings."""
+    """MIDI file (a path or an open binary file) -> note array. With
+    use_pedal, notes released while the sustain pedal is down keep sounding
+    until the pedal comes up, so the duration is the time the string
+    actually rings."""
     now = 0.0
     pedal = False
     active = {}        # pitch -> (onset, velocity): key is held down
@@ -75,11 +128,13 @@ def load_notes(path, use_pedal=True):
     notes = []
 
     def end(store, pitch):
+        """Finish the note on `pitch` in `store` (if any) at the current time."""
         if pitch in store:
             on, vel = store.pop(pitch)
             notes.append((on, pitch, vel, max(now - on, 0.01)))
 
-    for msg in mido.MidiFile(path):            # msg.time is seconds since last
+    midi = mido.MidiFile(path) if isinstance(path, str) else mido.MidiFile(file=path)
+    for msg in midi:                           # msg.time is seconds since last
         now += msg.time
         if msg.type == "note_on" and msg.velocity > 0:
             end(active, msg.note); end(sustained, msg.note)   # re-struck key
@@ -126,14 +181,17 @@ def save_notes(notes, path):
     track.append(mido.MetaMessage("set_tempo", tempo=500000, time=0))
     last = 0
     for t_ms, is_on, pitch, vel in events:
-        tick = int(round(t_ms * 0.96))
+        tick = int(round(t_ms * 0.96))         # 960 ticks per second
+        # MIDI times are deltas from the previous event
         track.append(mido.Message("note_on" if is_on else "note_off",
                                   note=pitch, velocity=vel, time=tick - last))
         last = tick
     mid.save(path)
 ```
 
-`load_notes` walks through the file's events while keeping a running clock. Iterating over a `mido.MidiFile` gives each message a `time` field that is the number of seconds since the previous message, with the file's tempo already taken into account, so adding them up gives absolute time.
+`load_notes` accepts either a path or an open file. MAESTRO's files are read by path; Aria's are read straight out of the archive as bytes.
+
+It walks through the file's events while keeping a running clock. Iterating over a `mido.MidiFile` gives each message a `time` field that is the number of seconds since the previous message, with the file's tempo already taken into account, so adding them up gives absolute time.
 
 Two dictionaries track what is sounding. `active` holds keys that are physically down. `sustained` holds keys that have been released but are still ringing because the pedal is down. A note ends, and is written to the list, in one of three ways: the key is released with the pedal up, the pedal comes up while the note is in `sustained`, or the same key is struck again.
 

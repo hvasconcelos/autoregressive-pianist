@@ -1,6 +1,6 @@
 # 18. Captions
 
-Qwen is conditioned on text, so every training passage needs a sentence that describes it. MAESTRO has no descriptions. We write them automatically from the tags we already compute.
+Qwen is conditioned on text, so every training passage needs a sentence that describes it. Neither dataset has descriptions: MAESTRO has a composer and a title, and Aria-MIDI has labels, not sentences. We write them automatically from the tags we already have.
 
 ::: filename
 qwen/captions.py
@@ -31,7 +31,11 @@ WORDS = {
                  "high": ["high on the keyboard", "in the bright upper register"]},
     "era": {"baroque": ["baroque"], "classical": ["classical-era"],
             "romantic": ["romantic"], "modern": ["early modern"]},
+    "genre": {"classical": ["classical"], "jazz": ["jazz", "jazzy"], "pop": ["pop"],
+              "film": ["cinematic", "film-score"], "ragtime": ["ragtime"],
+              "other": []},
 }
+# {adj} is the joined adjectives, {Adj} the same capitalised, {A} its article
 OPENERS = ["{A} {adj} piano piece", "Piano music, {adj}", "Play something {adj}",
            "{Adj} solo piano", "{A} {adj} performance"]
 PLAIN_OPENERS = ["A piano piece", "Solo piano music", "Play the piano", "A piano performance"]
@@ -54,11 +58,15 @@ def key_words(key, rng):
 def caption(tags, rng):
     """tags dict -> a sentence. Missing tags are simply not mentioned."""
     pick = lambda options: options[rng.integers(len(options))]
-    adjs = [pick(WORDS[k][tags[k]]) for k in ("density", "dynamics", "era") if k in tags]
-    rng.shuffle(adjs)
+    keys = ["density", "dynamics", "era", "genre"]
+    if "era" in tags and tags.get("genre") == "classical":
+        keys.remove("genre")                 # an era already says classical
+    adjs = [pick(WORDS[k][tags[k]]) for k in keys
+            if WORDS[k].get(tags.get(k))]           # "other" genre has no words
+    rng.shuffle(adjs)                        # vary the word order too
     if adjs:
         adj = ", ".join(adjs)
-        article = "An" if adj[0] in "aeiou" else "A"
+        article = "An" if adj[0] in "aeiou" else "A"   # good enough for these words
         text = pick(OPENERS).format(adj=adj, Adj=adj[0].upper() + adj[1:], A=article)
     else:
         text = pick(PLAIN_OPENERS)
@@ -79,10 +87,11 @@ if __name__ == "__main__":
     for _ in range(4):
         print(caption(full, rng))
     print(caption({"era": "modern", "key": "Bbmaj"}, rng))
+    print(caption({"density": "dense", "dynamics": "f", "genre": "jazz"}, rng))
     print(caption({}, rng))
 ```
 
-For each passage, `caption` picks one wording at random for each tag present, shuffles the adjectives, picks one of five sentence openings, and adds the register, key and composer when present. Running the file shows some examples:
+For each passage, `caption` picks one wording at random for each tag present (the genre becomes an adjective such as "jazzy" or "cinematic"; `other` has no wording and is left out, and so is `classical` when an era is present, since "classical, romantic" says the same thing twice), shuffles the adjectives, picks one of five sentence openings, and adds the register, key and composer when present. Running the file shows some examples:
 
 ``` bash
 python qwen/captions.py
@@ -94,7 +103,8 @@ A quiet, romantic, slow performance, deep in the bass, in C-sharp minor, like Ch
 Piano music, unhurried, romantic, gentle, deep in the bass, in C-sharp minor, like Chopin.
 A slow, romantic, soft performance, in the low register, in C-sharp minor, in the style of Chopin.
 An early modern performance, in B-flat major.
-A piano piece.
+Play something jazz, strong, fast.
+Solo piano music.
 ```
 
 ## 18.1 Why the wording varies
@@ -107,10 +117,10 @@ Keys are written the way musicians usually write them: C-sharp minor and not D-f
 
 ## 18.2 The limits of generated captions
 
-Be clear about what this does and does not achieve. The captions only ever describe six properties. Qwen's language ability makes the model flexible about *how* those properties are asked for. It does not teach the model properties that no caption mentions. A request for "a waltz" will not produce three-four time, because no training caption said which passages were waltzes.
+Be clear about what this does and does not achieve. The captions only ever describe the seven tags. Qwen's language ability makes the model flexible about *how* those properties are asked for. It does not teach the model properties that no caption mentions. A request for "a waltz" will not produce three-four time, because no training caption said which passages were waltzes.
 
 There are two ways to widen the range later.
 
-**Richer captions for MAESTRO.** MAESTRO's metadata includes each piece's title, such as "Nocturne in E-flat major" or "Etude Op. 10 No. 4". A language model can turn titles into extra caption words (nocturne, étude, sonata, waltz). This is a small change to `make_batch` and a large gain in vocabulary.
+**Richer captions for MAESTRO.** MAESTRO's metadata includes each piece's title, such as "Nocturne in E-flat major" or "Etude Op. 10 No. 4". A language model can turn titles into extra caption words (nocturne, étude, sonata, waltz). This is a small change to `make_batch` and a large gain in vocabulary. Aria-MIDI's metadata already has a `form` label (waltz, nocturne, sonata and so on) for 60,848 recordings, which could go straight into the captions.
 
 **A captioned dataset.** MidiCaps provides 168,000 MIDI files with written descriptions that cover genre, mood, tempo and instrumentation. Its files are multi-instrument band arrangements and not piano performances, so they would need to be reduced to a single piano part and would bring score-like timing. Treat it as a second-stage experiment.

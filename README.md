@@ -1,12 +1,17 @@
 # Autoregressive Pianist
 
-A small GPT-style model that learns to play solo piano from the
-[MAESTRO](https://magenta.tensorflow.org/datasets/maestro) dataset. You can steer it
-with tags (key, dynamics, density, register, era, composer) or plain words like
-"slow and quiet in D minor". It can write MIDI files or play live on a MIDI
+A small GPT-style model that learns to play solo piano from two datasets:
+[MAESTRO](https://magenta.tensorflow.org/datasets/maestro) (about 200 hours of
+classical piano recorded on concert grands) and a genre-balanced slice of
+[Aria-MIDI](https://huggingface.co/datasets/loubb/aria-midi) (about 2,200 hours of
+transcribed classical, jazz, pop, film music, ragtime and more). You can steer it
+with tags (key, dynamics, density, register, era, composer, genre) or plain words
+like "slow and quiet in D minor" or "a jazzy ballad". It can write MIDI files or play live on a MIDI
 instrument.
 
 Training runs on Apple Silicon with [MLX](https://github.com/ml-explore/mlx).
+A second version fine-tunes a small Qwen on the same two datasets so that any
+sentence works as a request; it needs an NVIDIA GPU (section 9).
 
 ## Pipeline at a glance
 
@@ -78,7 +83,7 @@ uv run python sample.py --model runs/toy/best --request "fast and loud" --out to
 
 Validation loss should drop from about 2.5 to about 1.9.
 
-## 3. Get MAESTRO
+## 3. Get the data
 
 Download the MIDI-only version of MAESTRO v3.0.0 (about 57 MB) and unzip it into `data/maestro/`:
 
@@ -92,48 +97,41 @@ unzip -q data/maestro/maestro-v3.0.0-midi.zip -d data/maestro
 You should now have `data/maestro/maestro-v3.0.0/maestro-v3.0.0.csv` and one folder per
 year (`2004/`, `2006/`, ...).
 
+Then download Aria-MIDI's deduplicated subset (2.0 GB, 371,053 files, CC BY-NC-SA 4.0)
+into `data/aria/`. Don't unpack it: `prepare_aria.py` reads the archive directly.
+
+```bash
+hf download loubb/aria-midi aria-midi-v1-deduped-ext.tar.gz --repo-type dataset --local-dir data/aria
+```
+
 ## 4. Prepare the data
+
+### MAESTRO
 
 ```bash
 uv run python prepare.py --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
 ```
 
 This reads every performance, keeps the 88 piano keys, drops fragments with fewer
-than 64 notes, attaches composer and era tags, and writes `train.npz`,
+than 64 notes, attaches genre (`classical`), composer and era tags, and writes `train.npz`,
 `validation.npz` and `test.npz` to `data/maestro_prepared/`. It uses MAESTRO's own
 train/validation/test split. Any composers it can't place in an era are printed
 at the end; you can add them to the table in `tags.py`.
 
-Optional: check that every tag value has a fair share of the data.
+### Aria-MIDI
 
 ```bash
-uv run python stats.py --data data/maestro_prepared --split train
-```
-
-If one value is almost empty, adjust the bucket thresholds in `tags.py`. These
-tags are measured when batches are built, so you don't need to run `prepare.py`
-again (you do if you change the `ERA` table).
-
-## 4b. Add Aria-MIDI (optional, more data and a genre tag)
-
-[Aria-MIDI](https://huggingface.co/datasets/loubb/aria-midi) is solo piano
-transcribed from recordings (CC BY-NC-SA 4.0). It adds genres that MAESTRO
-lacks, such as jazz, pop, film music and ragtime. Download the deduplicated subset
-(2.0 GB, 371,053 files):
-
-```bash
-hf download loubb/aria-midi aria-midi-v1-deduped-ext.tar.gz --repo-type dataset --local-dir data/aria
 uv run python prepare_aria.py --archive data/aria/aria-midi-v1-deduped-ext.tar.gz --out data/aria_prepared
 ```
 
-`prepare_aria.py` reads the archive directly, so there's no need to unpack it.
 It picks files using each recording's audio-quality score, best first. It
 takes one file from each genre in turn, so small genres aren't crowded out, and
 stops at `--notes` (default 55M, about 10× MAESTRO). Of the picked
 recordings, one in `--hold-out` (100) goes to `validation.npz` and another
 one in 100 to `test.npz`. Both are chosen by recording ID, so the split is
 the same on every run and every genre is represented. Files without a genre
-label are skipped.
+label are skipped. It takes a few minutes and gives 37,683 train, 392 validation and
+389 test pieces (53.6M training notes).
 
 Aria's genre labels map onto the `genre` tag like this:
 
@@ -146,36 +144,59 @@ Aria's genre labels map onto the `genre` tag like this:
 | ragtime | `ragtime` |
 | folk, ambient | `other` |
 
-All MAESTRO pieces are tagged `classical`, so run `prepare.py` again after
-updating to get the genre tag on them. For classical Aria files, era and
+For classical Aria files, era and
 composer come from the composer's name as for MAESTRO, falling back to Aria's
 `music_period`. Other genres get no era or composer. The mapping is in `tags.py`
 (`GENRE`, `PERIOD`, `aria_tags`).
 
-Adding the genre tag changes the vocabulary from 459 to 465 tokens, so v1
-checkpoints can't be resumed with this code. Train a new model.
+### Check the tags
+
+Check that every tag value has a fair share of each dataset:
+
+```bash
+uv run python stats.py --data data/maestro_prepared
+uv run python stats.py --data data/aria_prepared
+```
+
+If one value is almost empty, adjust the bucket thresholds in `tags.py`. These
+tags are measured when batches are built, so you don't need to prepare again
+(you do if you change `ERA`, `GENRE` or `PERIOD`, which are stored at prepare
+time).
+
+The genre tag made the vocabulary 465 tokens (459 before), so checkpoints from
+before it can't be loaded by the current code.
 
 ## 5. Train
 
-The defaults are the full model: 6 layers, width 512, 8 heads, 1024-token context,
-batch 32, 20,000 steps.
+Train on both datasets. List MAESTRO first: training uses every folder's
+`train.npz`, but validation uses only the first folder's, so the validation loss
+measures classical playing on the cleanest data.
 
 ```bash
-uv run python train.py --data data/maestro_prepared --out runs/v1
+caffeinate -i uv run python train.py --data data/maestro_prepared data/aria_prepared \
+    --out runs/v2 --batch 8 --steps 60000
 ```
+
+The model is 6 layers, width 512, 8 heads and a 1024-token context, 19.1M
+parameters. The two datasets are about 227M tokens. 60,000 steps at batch 8 is a
+little over two passes and takes about 9.5 hours on an M1 Pro. `caffeinate`
+keeps the Mac awake.
+
+For a MAESTRO-only baseline to compare against, train
+`--data data/maestro_prepared --out runs/v1 --batch 8`.
 
 ### Macs with 16 GB of memory or less: use `--batch 8`
 
-The default batch (32 sequences × 1024 tokens) needs more than 16 GB during
+`train.py`'s default batch (32 sequences × 1024 tokens) needs more than 16 GB during
 training, because attention keeps a 1024×1024 grid per head and layer for
 backprop. On a 16 GB Mac the run starts swapping and never prints a progress
 line. Use a smaller batch instead:
 
 ```bash
-uv run python train.py --data data/maestro_prepared --out runs/v1 --batch 8
+uv run python train.py --data data/maestro_prepared data/aria_prepared --out runs/v2 --batch 8
 ```
 
-This needs roughly 4 GB. `--batch 16` (about 7 GB) may work if you close other
+This needs roughly 4 GB, plus about 1 GB for the two datasets' notes. `--batch 16` (about 7 GB) may work if you close other
 apps. Signs that you're out of memory: no `step 50` line after a few minutes,
 and swap use climbing in Activity Monitor.
 
@@ -187,8 +208,8 @@ Each progress line shows `tokens/s`. Estimate the total time with:
 hours ≈ steps × batch × 1023 / tokens_per_s / 3600
 ```
 
-As a rough guide, an M1 Pro runs at about 10–15k tokens/s on the default model,
-so 20,000 steps at `--batch 8` take about 3–5 hours. The first progress line
+Measured on an M1 Pro: about 14.5k tokens/s at `--batch 8`, so 60,000 steps take
+about 9.5 hours and 20,000 about 3.2 hours. The first progress line
 takes a minute or two because MLX compiles the training step once. To shorten
 the run, lower `--steps` (for example `--steps 10000`). `best.safetensors` is
 saved whenever validation improves, so you can stop at any point and still
@@ -198,9 +219,13 @@ What happens while it runs:
 
 - A progress line every 50 steps (`loss`, `tokens/s`).
 - Every 500 steps it computes validation loss on fixed batches and writes a row
-  to `runs/v1/log.csv` (`step,train_loss,val_loss,tokens_per_s`).
-- It saves `runs/v1/last.{json,safetensors}` at every evaluation, and
-  `runs/v1/best.{json,safetensors}` when validation loss reaches a new low.
+  to `runs/v2/log.csv` (`step,train_loss,val_loss,tokens_per_s`).
+- It saves `runs/v2/last.{json,safetensors}` at every evaluation, and
+  `runs/v2/best.{json,safetensors}` when validation loss reaches a new low.
+
+The training loss sits below the validation loss partly because it is mostly
+Aria music, while validation is MAESTRO only. A gap is not by itself
+overfitting; watch whether validation keeps falling.
 
 The learning rate warms up linearly for `--warmup` steps, then follows a cosine
 curve down to 10% of `--lr`. AdamW is used with gradient clipping at 1.0.
@@ -208,11 +233,14 @@ curve down to 10% of `--lr`. AdamW is used with gradient clipping at 1.0.
 ### Resuming
 
 If training stops, run the same command again with `--resume`. Training picks up
-from `runs/v1/last` and continues the step count, LR schedule and log file:
+from `runs/v2/last` and continues the step count, LR schedule and log file:
 
 ```bash
-uv run python train.py --data data/maestro_prepared --out runs/v1 --resume
+caffeinate -i uv run python train.py --data data/maestro_prepared data/aria_prepared \
+    --out runs/v2 --batch 8 --steps 60000 --resume
 ```
+
+Keep `--batch`, `--steps`, `--lr` and `--warmup` the same as the original run.
 
 Only the optimiser's step counter is restored; its momentum buffers start fresh.
 
@@ -248,14 +276,19 @@ Only the optimiser's step counter is restored; its momentum buffers start fresh.
 
 ## 6. Evaluate
 
+Run it on each dataset's test split:
+
 ```bash
-uv run python evaluate.py --model runs/v1/best --data data/maestro_prepared
+uv run python evaluate.py --model runs/v2/best --data data/maestro_prepared --split test --keys
+uv run python evaluate.py --model runs/v2/best --data data/aria_prepared --split test
 ```
 
 This prints:
 
 1. **Held-out loss** for each token family (pitch, velocity, duration, shift) and
-   overall, with perplexity. Use `--split test` for the final number.
+   overall, with perplexity. On MAESTRO it compares directly with a MAESTRO-only
+   model; the MAESTRO-only baseline `v1` scored 2.139 on the test split
+   (`docs/results/small-model-v1.md`). On Aria it measures the new genres.
 2. **Tag adherence**: the model generates with each value of `density`, `dynamics`
    and `register`, measures what it actually played, and reports two rates next
    to the chance rate:
@@ -276,14 +309,19 @@ This prints:
    tried `--samples` times (default 8), so expect ±10% noise. Use `--samples 32`
    when comparing two models.
 
+   Genre, era and composer can't be measured from notes, so they aren't in this
+   table. Judge genre by ear: generate the same request with each `genre=` value
+   and listen.
+
 ## 7. Generate music
 
 To write a MIDI file:
 
 ```bash
-uv run python sample.py --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
+uv run python sample.py --model runs/v2/best --request "slow and quiet in D minor" --out out.mid
+uv run python sample.py --model runs/v2/best --request "a jazzy ballad in F major" --out jazz.mid
 # or with exact tags
-uv run python sample.py --model runs/v1/best --tags key=Dmin,dynamics=p,density=sparse --out out.mid
+uv run python sample.py --model runs/v2/best --tags key=Dmin,dynamics=p,genre=film --out film.mid
 ```
 
 Useful flags: `--notes` (default 400), `--temperature` (default 1.0),
@@ -311,7 +349,7 @@ Available tag values:
 
 ```bash
 uv run python play.py --list                                   # show MIDI output ports
-uv run python play.py --port "IAC Driver Bus 1" --request "calm, quiet, in F major"
+uv run python play.py --model runs/v2/best --port "IAC Driver Bus 1" --request "calm, quiet, in F major"
 ```
 
 While it plays, type a new request and press Enter to change the music. Ctrl-C
@@ -323,6 +361,31 @@ Audio MIDI Setup to send notes to a DAW or software piano.
 has to be faster than the music for `play.py` to keep up. If it isn't, raise
 `--lookahead` (default 1.0 s).
 
+## 9. The Qwen version (Part II of the book)
+
+`qwen/` fine-tunes `Qwen/Qwen3-0.6B-Base` to continue a plain-text request with
+music, so any sentence works as a request. It uses PyTorch and `transformers` on an
+NVIDIA GPU (the book uses a DGX Spark), not MLX. It trains on the same prepared
+data as the small model: copy `data/maestro_prepared` and `data/aria_prepared`
+(about 400 MB) to the GPU machine. The raw downloads are not needed there.
+
+```bash
+uv pip install torch transformers accelerate safetensors numpy mido python-rtmidi
+
+# two-minute check, then the real run; validation uses the first --data folder
+uv run python qwen/train_qwen.py --data data/maestro_prepared data/aria_prepared --out runs/qwen_test \
+    --steps 60 --batch 4 --warmup 10 --eval-every 20 --eval-batches 2
+nohup uv run python qwen/train_qwen.py --data data/maestro_prepared data/aria_prepared --out runs/qwen > qwen.log 2>&1 &
+# add --resume to continue
+
+uv run python qwen/play_qwen.py --model runs/qwen/best --out test.mid \
+    --request "A slow, quiet piano piece in D minor, like Chopin."
+```
+
+Every passage gets a caption written from its measured tags, including the genre
+(`qwen/captions.py`). Because validation is on MAESTRO only, the `val` figure can be
+compared directly with the small model's validation loss.
+
 ## Full run, start to finish
 
 ```bash
@@ -332,17 +395,18 @@ uv pip install mlx numpy mido python-rtmidi
 curl -L -o data/maestro/maestro-v3.0.0-midi.zip --create-dirs \
   https://storage.googleapis.com/magentadata/datasets/maestro/v3.0.0/maestro-v3.0.0-midi.zip
 unzip -q data/maestro/maestro-v3.0.0-midi.zip -d data/maestro
-
-uv run python prepare.py  --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
-uv run python stats.py    --data data/maestro_prepared
-uv run python train.py    --data data/maestro_prepared --out runs/v1 --batch 8  # add --resume to continue
-
-# optional: add Aria-MIDI and the genre tag
 hf download loubb/aria-midi aria-midi-v1-deduped-ext.tar.gz --repo-type dataset --local-dir data/aria
-uv run python prepare_aria.py --out data/aria_prepared
-uv run python train.py    --data data/maestro_prepared data/aria_prepared --out runs/v2 --batch 8
-uv run python evaluate.py --model runs/v1/best --data data/maestro_prepared --split test
-uv run python sample.py   --model runs/v1/best --request "slow and quiet in D minor" --out out.mid
+
+uv run python prepare.py      --maestro data/maestro/maestro-v3.0.0 --out data/maestro_prepared
+uv run python prepare_aria.py --archive data/aria/aria-midi-v1-deduped-ext.tar.gz --out data/aria_prepared
+uv run python stats.py        --data data/aria_prepared
+
+caffeinate -i uv run python train.py --data data/maestro_prepared data/aria_prepared \
+    --out runs/v2 --batch 8 --steps 60000                                   # add --resume to continue
+
+uv run python evaluate.py --model runs/v2/best --data data/maestro_prepared --split test --keys
+uv run python evaluate.py --model runs/v2/best --data data/aria_prepared --split test
+uv run python sample.py   --model runs/v2/best --request "a jazzy ballad in F major" --out out.mid
 ```
 
 `data/` and `runs/` are git-ignored.

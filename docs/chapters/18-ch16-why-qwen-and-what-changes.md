@@ -1,6 +1,6 @@
 # 16. Why Qwen, and what changes
 
-The small model has one clear limitation: it understands 55 tags and nothing else. A request has to be squeezed through a keyword table or a second model before it reaches the pianist.
+The small model has one clear limitation: it understands 61 tags and nothing else. A request has to be squeezed through a keyword table or a second model before it reaches the pianist.
 
 A language model removes that step. Qwen already knows what "melancholy", "like a lullaby" and "in the style of Chopin" mean as language. If we teach it to continue a sentence with music tokens, the request can be any sentence.
 
@@ -23,7 +23,7 @@ Nearly everything.
 
 **It brings language.** The request is tokenised by Qwen's own tokeniser and understood by layers that were trained on a very large amount of text.
 
-**It does not bring music.** Qwen has read *about* music but has never been trained to produce note events. The music tokens are new to it and start with meaningless vectors. Almost all of its musical skill will come from the same MAESTRO data as before. Do not expect the pre-training to make it a better pianist by itself; expect it to make it a better *listener*.
+**It does not bring music.** Qwen has read *about* music but has never been trained to produce note events. The music tokens are new to it and start with meaningless vectors. Almost all of its musical skill will come from the same MAESTRO and Aria-MIDI data as before. Do not expect the pre-training to make it a better pianist by itself; expect it to make it a better *listener*.
 
 **It costs speed.** The model is about thirty times larger. Chapter 21 deals with keeping it fast enough.
 

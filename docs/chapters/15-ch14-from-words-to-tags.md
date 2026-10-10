@@ -21,6 +21,8 @@ small language model that fills in the tags as JSON.
 import json, re, sys
 from tokenizer import TAG_VALUES, KEYS
 
+# category -> value -> words that ask for it. Words match at the start of a
+# word, so a stem like "melanchol" also catches "melancholy" and "melancholic".
 KEYWORDS = {
     "density": {"very_sparse": ["very slow", "very sparse", "minimal", "still"],
                 "sparse": ["slow", "sparse", "calm", "gentle", "peaceful", "adagio", "sad",
@@ -39,7 +41,14 @@ KEYWORDS = {
                  "high": ["high", "bright", "sparkl", "treble", "music box"]},
     "era": {"baroque": ["baroque"], "classical": ["classical era", "classical style"],
             "romantic": ["romantic"], "modern": ["modern", "impressionis", "20th"]},
+    "genre": {"classical": ["classical"],
+              "jazz": ["jazz", "swing", "bebop", "blues", "bossa"],
+              "pop": ["pop", "rock"],
+              "film": ["film", "movie", "soundtrack", "cinematic"],
+              "ragtime": ["ragtime", "stride"],
+              "other": ["folk", "ambient"]},
 }
+# when no key is named, a mood word suggests one
 MOOD_KEYS = {"sad": "Amin", "melanchol": "Dmin", "dark": "Cmin",
              "happy": "Cmaj", "cheerful": "Gmaj", "bright": "Dmaj"}
 FLATS = {"C#": "Db", "D#": "Eb", "F#": "Gb", "G#": "Ab", "A#": "Bb"}
@@ -64,7 +73,7 @@ def parse_request(text):
         key = FLATS.get(note, note) + ("min" if m.group(4).lower().startswith("min") else "maj")
         if key in KEYS:
             tags["key"] = key
-    else:
+    else:                                    # no key named: guess from the mood
         for word, key in MOOD_KEYS.items():
             if has(word):
                 tags["key"] = key
@@ -92,6 +101,7 @@ def parse_request_llm(text, model_name="mlx-community/Qwen3-1.7B-4bit"):
     prompt = tok.apply_chat_template(messages, add_generation_prompt=True,
                                      tokenize=False, enable_thinking=False)
     reply = generate(model, tok, prompt=prompt, max_tokens=120)
+    # take the first {...} in the reply; anything unparsable means no tags
     found = re.search(r"\{.*\}", reply, re.S)
     try:
         raw = json.loads(found.group(0)) if found else {}
@@ -111,6 +121,7 @@ def parse_tags(spec):
 
 
 if __name__ == "__main__":
+    # the rest of the command line is the request; --llm picks the model parser
     args = [a for a in sys.argv[1:] if a != "--llm"]
     fn = parse_request_llm if "--llm" in sys.argv else parse_request
     print(fn(" ".join(args)))
@@ -135,6 +146,18 @@ python request.py "very fast and loud, bright, F# major"
 ``` text
 {'density': 'very_dense', 'dynamics': 'f', 'register': 'high', 'key': 'Gbmaj'}
 ```
+
+Genre works the same way. "Jazzy", "swing" and "blues" ask for jazz; "film", "soundtrack" and "cinematic" for film music; "ragtime" and "stride" for ragtime; "pop" and "rock" for pop; and "classical" on its own for classical. The era table deliberately avoids plain "classical", since people use it for any old music, which is what the genre means.
+
+``` bash
+python request.py "a jazzy, slow ballad in F major"
+```
+
+``` text
+{'density': 'sparse', 'genre': 'jazz', 'key': 'Fmaj'}
+```
+
+"Ballad" is not a keyword, because there are ballads in every genre. If it were one for pop, it would beat "jazz" here, because the longest match wins.
 
 Anything the table does not recognise is ignored, and the missing tags are simply left out. Thanks to tag dropout in training, the model handles that well.
 

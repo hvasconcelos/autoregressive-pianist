@@ -6,7 +6,7 @@ This chapter explains the model in plain terms. Nothing here is specific to musi
 
 The model does one job: given a sequence of tokens, it outputs a probability for every token in the vocabulary being the next one.
 
-Suppose the sequence so far is `Pitch_67 Vel_82 Dur_370 Shift_380`. A trained model might say the next token is `Pitch_67` with probability 0.21, `Pitch_69` with 0.14, `Pitch_64` with 0.09, and so on across all 459 tokens. To generate, we pick one token according to those probabilities, add it to the sequence, and ask again. Repeating this is all that "playing" means.
+Suppose the sequence so far is `Pitch_67 Vel_82 Dur_370 Shift_380`. A trained model might say the next token is `Pitch_67` with probability 0.21, `Pitch_69` with 0.14, `Pitch_64` with 0.09, and so on across all 465 tokens. To generate, we pick one token according to those probabilities, add it to the sequence, and ask again. Repeating this is all that "playing" means.
 
 ## 3.2 How the model is trained
 
@@ -16,11 +16,11 @@ The score for one position is the **cross-entropy loss**: minus the natural loga
 
 - If the model gave the correct token probability 1.0, the loss is 0.
 - If it gave 0.5, the loss is 0.69.
-- If it gave 1/459, which is what blind guessing gives, the loss is 6.13.
+- If it gave 1/465, which is what blind guessing gives, the loss is 6.14.
 
 The loss of a batch is the average over all positions. Training repeatedly nudges the model's parameters in the direction that lowers this average. The nudging is done by an optimiser; ours is AdamW, a standard choice.
 
-One number is easier to picture than the loss: **perplexity**, which is e raised to the loss. A perplexity of 6 means the model is, on average, as uncertain as if it were choosing among 6 equally likely tokens. Blind guessing has a perplexity of 459.
+One number is easier to picture than the loss: **perplexity**, which is e raised to the loss. A perplexity of 6 means the model is, on average, as uncertain as if it were choosing among 6 equally likely tokens. Blind guessing has a perplexity of 465.
 
 One pass through the model scores all 1,000 positions at once. This is possible because of a rule called the *causal mask*: when computing the prediction at position 500, the model is prevented from looking at positions 501 and later. Every position therefore gets an honest "predict what comes next" exercise from a single pass.
 
@@ -74,7 +74,7 @@ Generating token by token would be wasteful if the model re-read the whole seque
 
 ## 3.8 Sizing the model
 
-The size is set by three numbers: the width of the vectors (512), the number of layers (6) and the vocabulary (459). The parameter count follows directly.
+The size is set by three numbers: the width of the vectors (512), the number of layers (6) and the vocabulary (465). The parameter count follows directly.
 
 | Part | Calculation | Parameters |
 |----|----|----|
@@ -83,8 +83,8 @@ The size is set by three numbers: the width of the vectors (512), the number of 
 | Normalisation, per layer | 2 × 512 | 1,024 |
 | **One layer** |  | **3,146,752** |
 | Six layers | 6 × 3,146,752 | 18,880,512 |
-| Embedding table (also the output layer) | 459 × 512 | 235,008 |
+| Embedding table (also the output layer) | 465 × 512 | 238,080 |
 | Final normalisation | 512 | 512 |
-| **Total** |  | **19,116,032** |
+| **Total** |  | **19,119,104** |
 
 That is the "20M" model: 19.1 million parameters. Running `python model.py` prints the same figure.

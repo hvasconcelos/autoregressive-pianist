@@ -44,12 +44,12 @@ Each kind of token trades precision against vocabulary size.
 | Group | Count | Token ids | Examples |
 |----|----|----|----|
 | Special | 4 | 0 to 3 | `<pad>` `<bos>` `<eos>` `<sep>` |
-| Tags | 55 | 4 to 58 | `<density:sparse>` `<key:Dmin>` `<composer:chopin>` |
-| Pitch | 88 | 59 to 146 | `Pitch_21` ... `Pitch_108` |
-| Velocity | 32 | 147 to 178 | `Vel_2` `Vel_6` ... `Vel_126` |
-| Duration | 180 | 179 to 358 | `Dur_10` ... `Dur_8000` |
-| Shift | 100 | 359 to 458 | `Shift_10` ... `Shift_1000` |
-| **Total** | **459** |  |  |
+| Tags | 61 | 4 to 64 | `<density:sparse>` `<key:Dmin>` `<composer:chopin>` `<genre:jazz>` |
+| Pitch | 88 | 65 to 152 | `Pitch_21` ... `Pitch_108` |
+| Velocity | 32 | 153 to 184 | `Vel_2` `Vel_6` ... `Vel_126` |
+| Duration | 180 | 185 to 364 | `Dur_10` ... `Dur_8000` |
+| Shift | 100 | 365 to 464 | `Shift_10` ... `Shift_1000` |
+| **Total** | **465** |  |  |
 
 The four special tokens have fixed jobs. `<pad>` fills the unused end of a short sequence. `<bos>` starts every sequence. `<sep>` marks the end of the tags and the start of the music. `<eos>` marks the true end of a piece.
 
@@ -87,6 +87,8 @@ TAG_VALUES = {
     "composer": ["bach", "haydn", "mozart", "beethoven", "schubert", "chopin",
                  "schumann", "liszt", "mendelssohn", "brahms", "rachmaninoff",
                  "scriabin", "debussy", "ravel"],
+    # MAESTRO is all classical; the rest come from Aria-MIDI's metadata (tags.aria_tags)
+    "genre":    ["classical", "jazz", "pop", "film", "ragtime", "other"],
 }
 TAG_ORDER = list(TAG_VALUES)            # tags always appear in this order
 TAGS = [f"<{k}:{v}>" for k in TAG_ORDER for v in TAG_VALUES[k]]
@@ -116,6 +118,7 @@ DUR0 = VEL0 + N_VEL
 SHIFT0 = DUR0 + len(DUR_GRID)
 MUSIC0 = PITCH0                         # every id >= MUSIC0 is a music token
 
+# midpoints between grid values: searchsorted on them rounds to the nearest duration
 _DUR_EDGES = (DUR_GRID[:-1] + DUR_GRID[1:]) / 2
 
 
@@ -143,15 +146,16 @@ def encode_notes(notes):
     order = np.lexsort((notes[:, 1], onset))                # by onset, then pitch
     notes, onset = notes[order], onset[order]
     pitch = np.clip(notes[:, 1], PITCH_MIN, PITCH_MAX).astype(int) - PITCH_MIN
-    vel = np.clip(notes[:, 2], 1, 127).astype(int) // 4
-    dur = np.searchsorted(_DUR_EDGES, notes[:, 3])
+    vel = np.clip(notes[:, 2], 1, 127).astype(int) // 4   # 32 bins of 4
+    dur = np.searchsorted(_DUR_EDGES, notes[:, 3])          # nearest DUR_GRID index
 
+    # start the clock at the first onset, so the stream does not open with a wait
     out, now = [], onset[0] if len(onset) else 0
     for i in range(len(notes)):
         gap = int(onset[i] - now)
         while gap > 0:                                      # long waits chain
             s = min(gap, len(SHIFT_GRID))
-            out.append(SHIFT0 + s - 1)
+            out.append(SHIFT0 + s - 1)                      # Shift of s * 10 ms
             gap -= s
         now = onset[i]
         out += [PITCH0 + int(pitch[i]), VEL0 + int(vel[i]), DUR0 + int(dur[i])]
@@ -167,11 +171,11 @@ def decode_notes(tokens):
     for t in tokens:
         k = kind(t)
         if k == "shift":
-            now += int(SHIFT_GRID[t - SHIFT0]); cur = []
+            now += int(SHIFT_GRID[t - SHIFT0]); cur = []    # drop a half-built note
         elif k == "pitch":
             cur = [t - PITCH0 + PITCH_MIN]
         elif k == "vel" and len(cur) == 1:
-            cur.append((t - VEL0) * 4 + 2)
+            cur.append((t - VEL0) * 4 + 2)                  # centre of the bin
         elif k == "dur" and len(cur) == 2:
             notes.append((now, cur[0], cur[1], int(DUR_GRID[t - DUR0]))); cur = []
     return np.array(notes, dtype=np.float64).reshape(-1, 4)
@@ -198,6 +202,7 @@ def allowed_next(prev):
 
 
 if __name__ == "__main__":
+    # demo: encode a short tune, print the tokens, and decode it back
     print("vocabulary size:", VOCAB_SIZE)
     # the opening of "Happy Birthday": onset, pitch, velocity, duration
     hb = [(0, 67, 80, 375), (375, 67, 72, 125), (500, 69, 84, 500),
@@ -223,12 +228,12 @@ python tokenizer.py
 ```
 
 ``` text
-vocabulary size: 459
+vocabulary size: 465
 <bos> <dynamics:f> <key:Cmaj> <sep> Pitch_67 Vel_82 Dur_370 Shift_380 Pitch_67 Vel_74
 Dur_120 Shift_120 Pitch_69 Vel_86 Dur_500 Shift_500 Pitch_67 Vel_86 Dur_500 Shift_500
 Pitch_72 Vel_94 Dur_500 Shift_500 Pitch_71 Vel_90 Dur_1000
-[1, 12, 17, 3, 105, 167, 215, 396, 105, 165, 190, 370, 107, 168, 228, 408, 105, 168, 228,
- 408, 110, 170, 228, 408, 109, 169, 278]
+[1, 12, 17, 3, 111, 173, 221, 402, 111, 171, 196, 376, 113, 174, 234, 414, 111, 174, 234,
+ 414, 116, 176, 234, 414, 115, 175, 284]
 ```
 
 ![**Figure 3.** The same six notes as a piano roll. Each bar is a note: its row is the pitch, its length the duration, its shade the velocity. Underneath, the tokens for each note; the Shift token (orange) is the distance to the next note's start.](../images/piano-roll.svg)
@@ -251,6 +256,12 @@ A well-trained model follows this order almost always. "Almost" is not good enou
 
 ## 6.7 How many tokens is the dataset?
 
-A note costs three tokens plus, usually, one Shift. Notes inside a chord need no Shift, and long silences need more than one. The average comes to a little under four tokens per note. The MAESTRO training split has 5.66 million notes, so it holds roughly 22 million tokens. `stats.py` in the next chapter prints the exact figure for your copy.
+A note costs three tokens plus, usually, one Shift. Notes inside a chord need no Shift, and long silences need more than one. The average comes to a little under four tokens per note.
 
-Keep that number in mind: 22 million tokens of data for a model with 19 million parameters. The model has enough capacity to memorise a good part of the training set, which is why augmentation (chapter 8) and watching the validation loss (chapter 11) matter.
+| Training split | Notes | Tokens (approx.) |
+|----|---:|---:|
+| MAESTRO | 5.66 million | 22 million |
+| Aria-MIDI slice (chapter 7) | 53.6 million | 205 million |
+| **Both** | **59.3 million** | **227 million** |
+
+Keep that number in mind: about 227 million tokens of data for a model with 19 million parameters, or 12 tokens per parameter. On MAESTRO alone it would be about one token per parameter, enough for the model to memorise a good part of the training set. Augmentation (chapter 8) and watching the validation loss (chapter 11) still matter, but the second dataset is what moves the model out of that danger zone.

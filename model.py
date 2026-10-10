@@ -9,7 +9,7 @@ from mlx.utils import tree_flatten
 @dataclass
 class Config:
     """Model hyperparameters. Saved next to the weights so a checkpoint can be rebuilt."""
-    vocab_size: int = 459
+    vocab_size: int = 465    # tokenizer.VOCAB_SIZE
     ctx: int = 1024          # longest sequence the model is trained on
     dim: int = 512           # width of every token vector
     n_layers: int = 6

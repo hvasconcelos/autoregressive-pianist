@@ -12,10 +12,11 @@ The DGX Spark is a small desktop computer with an NVIDIA GB10 chip, 128 GB of me
 
 The commands below follow a community setup guide for this machine (listed in the sources) and were not run for this book. NVIDIA also publishes its own setup instructions and ready-made containers for the Spark; if anything here fails, use those.
 
-First copy the project folder from the Mac, including `data/maestro_prepared`. Those three `.npz` files are all the data the Spark needs. Run this on the Mac, from the folder that contains `pianist`, with `spark` replaced by the Spark's network name:
+First copy the project folder from the Mac, including `data/maestro_prepared` and `data/aria_prepared`. Those six `.npz` files, about 400 MB, are all the data the Spark needs; the raw downloads in `data/maestro` and `data/aria` can stay behind. Run this on the Mac, from the folder that contains `pianist`, with `spark` replaced by the Spark's network name:
 
 ``` bash
-rsync -av pianist/ spark:pianist/ --exclude .venv --exclude runs
+rsync -av pianist/ spark:pianist/ --exclude .venv --exclude runs \
+    --exclude data/maestro --exclude data/aria
 ```
 
 Then, on the Spark:

@@ -43,7 +43,9 @@ class PrintPort:
 
 
 class MidiPort:
+    """A real MIDI output port, opened by name (see --list)."""
     def __init__(self, name):
+        # imported here so the rest of the file works without mido installed
         import mido
         self.mido, self.port = mido, mido.open_output(name)
     def send(self, kind, pitch, velocity):
@@ -62,7 +64,9 @@ class Scheduler(threading.Thread):
     def __init__(self, port):
         super().__init__(daemon=True)
         self.port, self.lock = port, threading.Lock()
-        self.events = []       # heap of (time, order, count, kind, pitch, vel, id)
+        # heap of (time, order, count, kind, pitch, vel, id). At equal times
+        # order puts note-offs (0) before note-ons (1); count breaks ties.
+        self.events = []
         self.last = {}         # pitch -> (id, off time) of its most recent note
         self.cut = set()       # ids of notes that were cut short by a re-strike
         self.count = 0
@@ -71,6 +75,7 @@ class Scheduler(threading.Thread):
         self.t0 = time.monotonic() + 0.25          # small run-up before bar one
 
     def now(self):
+        """Current music time, in seconds."""
         return time.monotonic() - self.t0
 
     def pause(self, seconds):
@@ -79,6 +84,7 @@ class Scheduler(threading.Thread):
             self.t0 += seconds
 
     def add_note(self, on, pitch, vel, dur):
+        """Schedule a note-on at music time `on` and its note-off `dur` seconds later."""
         with self.lock:
             self.count += 1
             nid = self.count
@@ -91,13 +97,16 @@ class Scheduler(threading.Thread):
             self._push(on + dur, 0, "note_off", pitch, 0, nid)
 
     def _push(self, t, order, kind, pitch, vel, nid):
+        """Add one event to the heap. Caller must hold the lock."""
         self.count += 1
         heapq.heappush(self.events, (t, order, self.count, kind, pitch, vel, nid))
 
     def pending(self):
+        """Number of events not yet sent."""
         return len(self.events)
 
     def run(self):
+        """Thread loop: every millisecond, send all events whose time has come."""
         while self.running:
             due = []
             with self.lock:
@@ -109,13 +118,18 @@ class Scheduler(threading.Thread):
                         continue
                     due.append((kind, pitch, vel))
                     self.worst = max(self.worst, now - t)
-            for event in due:
+            for event in due:                      # send outside the lock
                 self.port.send(*event)
             time.sleep(0.001)
 
 
 def play(performer, port, lookahead=1.0, seconds=None, commands=None, to_request=None):
-    """Keep `lookahead` seconds of music generated ahead of the clock."""
+    """Keep `lookahead` seconds of music generated ahead of the clock.
+
+    Runs until the model emits "end", `seconds` of music are generated, or
+    Ctrl-C. Lines arriving on the `commands` queue are turned into a new
+    request with `to_request`. Returns stats: notes played, how many times
+    generation fell behind, and the worst send lateness in ms."""
     sched = Scheduler(port)
     sched.start()
     head = 0.0         # music time of the latest generated note onset
@@ -128,6 +142,8 @@ def play(performer, port, lookahead=1.0, seconds=None, commands=None, to_request
                 time.sleep(0.002)                  # the buffer is full: rest
                 continue
             r = performer.step()                   # generate one token
+            # r is "end", None (no note finished on this token),
+            # or a finished note (wait_ms, pitch, vel, dur_ms)
             if r == "end":
                 break
             if r:
@@ -163,6 +179,7 @@ def stdin_commands():
 
 
 def main():
+    """Parse arguments, load the model and play until stopped."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true", help="list MIDI output ports")
     ap.add_argument("--model", default="runs/v1/best")
@@ -181,8 +198,10 @@ def main():
         print("\n".join(mido.get_output_names()) or "no MIDI output ports found")
         return
 
+    # imported late so --list works without MLX
     from model import Pianist
     from performer import MLXBackend
+    # --tags gives the conditioning tags directly; otherwise parse them from --request
     tags = parse_tags(args.tags) if args.tags else parse_request(args.request)
     print("tags:", tags, file=sys.stderr)
     model, _ = Pianist.load(args.model)
@@ -222,7 +241,7 @@ The model is only ever called from the main thread. That is deliberate: machine-
 ## 13.3 Play
 
 ``` bash
-python play.py --model runs/v1/best --port "IAC Driver Bus 1" \
+python play.py --model runs/v2/best --port "IAC Driver Bus 1" \
     --request "calm and quiet, in F major"
 ```
 
@@ -243,7 +262,7 @@ The music moves to the new request over the next few seconds. Press Ctrl-C to st
 To check the scheduler without any MIDI device, leave out `--port`. The script then prints each event with its time instead of sending it:
 
 ``` bash
-python play.py --model runs/v1/best --tags density=sparse,dynamics=pp --seconds 5
+python play.py --model runs/v2/best --tags density=sparse,dynamics=pp --seconds 5
 ```
 
 ## 13.4 If the playing stutters

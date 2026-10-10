@@ -15,7 +15,8 @@ from mlx.utils import tree_flatten
 
 @dataclass
 class Config:
-    vocab_size: int = 459
+    """Model hyperparameters. Saved next to the weights so a checkpoint can be rebuilt."""
+    vocab_size: int = 465    # tokenizer.VOCAB_SIZE
     ctx: int = 1024          # longest sequence the model is trained on
     dim: int = 512           # width of every token vector
     n_layers: int = 6
@@ -24,6 +25,8 @@ class Config:
 
 
 class Attention(nn.Module):
+    """Causal multi-head self-attention with rotary positions and a key/value cache."""
+
     def __init__(self, c: Config):
         super().__init__()
         self.n_heads = c.n_heads
@@ -32,11 +35,16 @@ class Attention(nn.Module):
         self.rope = nn.RoPE(c.dim // c.n_heads)      # rotary position encoding
 
     def __call__(self, x, cache=None):
+        """x [B, T, C] -> (output [B, T, C], (keys, values) to pass back in next call).
+
+        Without a cache the whole sequence is processed at once (training).
+        With a cache, feed one new token and it attends to everything before it
+        (fast generation)."""
         B, T, C = x.shape
         q, k, v = mx.split(self.qkv(x), 3, axis=-1)
         # [B, T, C] -> [B, heads, T, C / heads]
         q, k, v = (a.reshape(B, T, self.n_heads, -1).transpose(0, 2, 1, 3) for a in (q, k, v))
-        past = 0 if cache is None else cache[0].shape[2]
+        past = 0 if cache is None else cache[0].shape[2]   # tokens already seen
         q, k = self.rope(q, offset=past), self.rope(k, offset=past)
         if cache is not None:                        # reuse earlier keys/values
             k = mx.concatenate([cache[0], k], axis=2)
@@ -45,11 +53,14 @@ class Attention(nn.Module):
         if cache is not None and T > 1:
             raise ValueError("with a cache, feed one token at a time")
         y = mx.fast.scaled_dot_product_attention(q, k, v, scale=q.shape[-1] ** -0.5, mask=mask)
-        y = y.transpose(0, 2, 1, 3).reshape(B, T, C)
+        y = y.transpose(0, 2, 1, 3).reshape(B, T, C)   # merge the heads back
         return self.out(y), (k, v)
 
 
 class Block(nn.Module):
+    """One transformer layer: attention then a feed-forward MLP, each pre-normed
+    with RMSNorm and added back onto the residual stream."""
+
     def __init__(self, c: Config):
         super().__init__()
         self.norm1 = nn.RMSNorm(c.dim)
@@ -67,6 +78,8 @@ class Block(nn.Module):
 
 
 class Pianist(nn.Module):
+    """The full model: token embedding, a stack of Blocks, and a tied output layer."""
+
     def __init__(self, c: Config):
         super().__init__()
         self.config = c
@@ -87,14 +100,18 @@ class Pianist(nn.Module):
         return logits, new_cache
 
     def n_params(self):
+        """Total number of trainable values."""
         return sum(v.size for _, v in tree_flatten(self.parameters()))
 
     def save(self, path, **extra):
+        """Write `path`.safetensors (weights) and `path`.json (config plus `extra`)."""
         self.save_weights(path + ".safetensors")
         json.dump({"config": asdict(self.config), **extra}, open(path + ".json", "w"))
 
     @staticmethod
     def load(path):
+        """Rebuild a model saved with `save`, in eval mode (dropout off).
+        Returns (model, info) where info is the saved json."""
         info = json.load(open(path + ".json"))
         model = Pianist(Config(**info["config"]))
         model.load_weights(path + ".safetensors")
@@ -103,6 +120,7 @@ class Pianist(nn.Module):
 
 
 if __name__ == "__main__":
+    # smoke test: build the default model and run a dummy batch through it
     m = Pianist(Config())
     print(f"{m.n_params() / 1e6:.1f} M parameters")
     logits, _ = m(mx.zeros((2, 16), dtype=mx.int32))

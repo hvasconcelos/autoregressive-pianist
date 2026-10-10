@@ -1,3 +1,3 @@
 # Appendices {.part}
 
-*Commands, vocabulary, glossary, sources, and adding Aria-MIDI*
+*Commands, vocabulary, glossary and sources*

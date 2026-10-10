@@ -49,7 +49,10 @@ def key_words(key, rng):
 def caption(tags, rng):
     """tags dict -> a sentence. Missing tags are simply not mentioned."""
     pick = lambda options: options[rng.integers(len(options))]
-    adjs = [pick(WORDS[k][tags[k]]) for k in ("density", "dynamics", "era", "genre")
+    keys = ["density", "dynamics", "era", "genre"]
+    if "era" in tags and tags.get("genre") == "classical":
+        keys.remove("genre")                 # an era already says classical
+    adjs = [pick(WORDS[k][tags[k]]) for k in keys
             if WORDS[k].get(tags.get(k))]           # "other" genre has no words
     rng.shuffle(adjs)                        # vary the word order too
     if adjs:
@@ -75,4 +78,5 @@ if __name__ == "__main__":
     for _ in range(4):
         print(caption(full, rng))
     print(caption({"era": "modern", "key": "Bbmaj"}, rng))
+    print(caption({"density": "dense", "dynamics": "f", "genre": "jazz"}, rng))
     print(caption({}, rng))

@@ -20,6 +20,7 @@ pianist/
   midi_io.py         read and write MIDI files                          (chapter 5)
   tags.py            measure tags from notes                            (chapter 7)
   prepare.py         MAESTRO -> compact note arrays                     (chapter 7)
+  prepare_aria.py    a genre-balanced slice of Aria-MIDI -> note arrays (chapter 7)
   stats.py           check the tag distribution                         (chapter 7)
   data.py            training batches and augmentation                  (chapter 8)
   model.py           the transformer, in MLX                            (chapter 9)
@@ -44,6 +45,7 @@ You should know exactly how far to trust each part before you spend a night of c
 
 **Tested by running it while writing this book:**
 
+- Part I ran on real data on an Apple M1 Pro with 16 GB. MAESTRO and the Aria-MIDI slice were downloaded and prepared with the scripts in chapter 7, and the model was trained on MAESTRO alone (`runs/v1`, 25,500 steps, about 5 hours) and then on both datasets (`runs/v2`, 60,000 steps), which was still training when this chapter was written. The speeds, memory limits and `v1` results in chapters 11 and 15 are measured. Generation and real-time playing through a virtual MIDI port (the IAC Driver) into a software piano also ran there.
 - Every file in Part I ran end to end with MLX 0.32.3: preparing data, tokenising, training, saving and resuming, generating, the real-time scheduler and the evaluation. This was done on a Linux machine using MLX's CPU build, on the small synthetic dataset of chapter 10, with a deliberately tiny model. The numbers in chapter 10 are from that run.
 - The Part II code ran end to end with PyTorch 2.14.1 and Transformers 5.19.0: adding the music tokens, the music-only output layer, the training loop, saving, resuming, reloading, and generating through the same player. This used a tiny, randomly initialised model with Qwen3's architecture, because the machine had no access to the real Qwen weights. The stand-in was saved in the same 16-bit format as Qwen and given spare embedding rows like Qwen's, but it ran on a CPU, so the GPU mixed-precision path was not exercised.
 - The real-time scheduler was tested with a simulated performer that stalls for 0.3 seconds at intervals. Events were still sent within about a millisecond of their due time.
@@ -51,9 +53,7 @@ You should know exactly how far to trust each part before you spend a night of c
 
 **Not tested:**
 
-- Nothing was run on Apple silicon or on a DGX Spark. Speeds and training times for those machines are estimates, and each one is marked as such. Chapter 11 shows how to measure your own speed in the first minute.
-- The full MAESTRO dataset could not be downloaded to the test machine. The preparation script was run against a folder with the same layout and column names. If MAESTRO's real files differ from the documented layout, `prepare.py` is where it will show.
-- No model was trained to convergence on real music, so this book cannot show you a loss value or a sound sample from the final system. Chapter 15 says what to expect and what counts as a pass.
+- Nothing was run on a DGX Spark. Speeds and training times for that machine are estimates, and each one is marked as such.
 - Sending notes to a physical MIDI port, the optional language-model request parser in chapter 14, and loading the real Qwen3 weights were written but not run.
 
 Where a claim comes from a published source rather than from a test, the source is listed at the end of the book.

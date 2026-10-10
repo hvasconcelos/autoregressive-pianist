@@ -1,16 +1,18 @@
 # 8. Batches and augmentation
 
-Training consumes *batches*: a block of 32 token sequences, each up to 1,024 tokens long. This chapter builds them.
+Training consumes *batches*: a block of token sequences, each up to 1,024 tokens long. The default is 32 sequences per batch; on a 16 GB Mac we use 8 (chapter 11). This chapter builds them.
 
 ## 8.1 Random passages, not fixed chunks
 
-A simple approach would cut every piece into consecutive chunks once and reuse them. We do something better. Every time a batch is needed, each of its 32 sequences is cut fresh from a random place in a random piece. Over a long training run the model sees every possible alignment of every piece, and never the same chunk twice.
+A simple approach would cut every piece into consecutive chunks once and reuse them. We do something better. Every time a batch is needed, each of its sequences is cut fresh from a random place in a random piece. Over a long training run the model sees every possible alignment of every piece, and never the same chunk twice.
 
-Pieces are chosen with probability proportional to their length, so that every note in the dataset is equally likely to be used.
+Pieces are chosen with probability proportional to their length, so that every note in the training data is equally likely to be used.
+
+The two datasets are loaded as one. `Dataset` takes a list of `.npz` files and joins them end to end, so a piece from MAESTRO and a piece from Aria are drawn in exactly the same way. Because drawing is by notes, each dataset's share of training is its share of the notes: about 10% MAESTRO and 90% Aria. The notes are kept as 32-bit floats, which halves the memory: about 1 GB for both datasets.
 
 ## 8.2 Augmentation
 
-Augmentation means altering the training data in ways that keep it valid music, so that the model sees more variety than the dataset contains. With 22 million tokens and 19 million parameters, it is the main defence against memorisation. Each passage gets three random changes.
+Augmentation means altering the training data in ways that keep it valid music, so that the model sees more variety than the dataset contains. With about 227 million tokens for 19 million parameters, memorisation is less of a risk than it would be with MAESTRO alone (22 million tokens), but augmentation still makes every pass over the data different. Each passage gets three random changes.
 
 | Change | Range | Why it is safe |
 |----|----|----|
@@ -22,7 +24,7 @@ The ranges are deliberately modest. Transposing by an octave would move music in
 
 ## 8.3 Tag dropout
 
-When you make a request you will rarely specify all six tags. "Something quiet" sets only one. The model must therefore be comfortable with any subset, and it only becomes comfortable with what it sees in training.
+When you make a request you will rarely specify all seven tags. "Something quiet" sets only one. The model must therefore be comfortable with any subset, and it only becomes comfortable with what it sees in training.
 
 `drop_tags` removes tags at random from each training passage, in two stages. One passage in ten loses all its tags, which teaches the model to play with no request at all. For the others, a removal probability between 0 and 0.8 is drawn first, and each tag is then dropped with that probability. Some passages therefore keep everything, some keep a single tag, and the rest fall in between. A simpler scheme that drops each tag with a fixed small probability would almost never produce a one-tag example, and one-tag requests are the most common kind.
 
@@ -61,17 +63,27 @@ def drop_tags(tags, rng):
 
 
 class Dataset:
-    def __init__(self, path):
-        z = np.load(path)
-        self.notes = z["notes"].astype(np.float64)
-        self.offsets = z["offsets"]
-        self.meta = json.loads(str(z["meta"]))
-        self.sizes = np.diff(self.offsets)
+    """One or more splits written by prepare.py / prepare_aria.py, as one array.
+
+    Piece i is notes[offsets[i]:offsets[i + 1]]; meta[i] holds its fixed tags
+    (genre, era, composer). `paths` is one .npz path or a list of them."""
+
+    def __init__(self, paths):
+        notes, sizes, self.meta = [], [], []
+        for path in [paths] if isinstance(paths, str) else paths:
+            z = np.load(path)
+            notes.append(z["notes"].astype(np.float32))       # float32 halves the RAM
+            sizes.append(np.diff(z["offsets"]))
+            self.meta += json.loads(str(z["meta"]))
+        self.notes = np.concatenate(notes)
+        self.sizes = np.concatenate(sizes)    # notes per piece
+        self.offsets = np.concatenate([[0], np.cumsum(self.sizes)])
 
     def __len__(self):
         return len(self.sizes)
 
     def piece(self, i):
+        """Note array of piece i."""
         return self.notes[self.offsets[i]:self.offsets[i + 1]]
 
     def passage(self, rng, budget, augment=True, tag_dropout=True):
@@ -79,15 +91,17 @@ class Dataset:
 
         Returns (tags, music token ids). The ids end with <eos> when the
         passage runs to the end of its piece."""
+        # longer pieces are picked more often, so every note is equally likely
         i = rng.choice(len(self), p=self.sizes / self.sizes.sum())
         piece = self.piece(i)
         n = budget // 3                            # a note is at least 3 tokens
         last_start = max(len(piece) - n, 0)
         start = last_start if rng.random() < 0.03 else rng.integers(0, last_start + 1)
         at_end = start == last_start               # 3 % of passages are endings
-        notes = piece[start:start + n].copy()
-        if augment:
+        notes = piece[start:start + n].astype(np.float64)
+        if augment:                                # small random variations
             lo, hi = notes[:, 1].min(), notes[:, 1].max()
+            # up to 3 semitones either way, staying on the keyboard
             shift = rng.integers(max(-3, T.PITCH_MIN - lo), min(3, T.PITCH_MAX - hi) + 1)
             notes[:, 1] += shift                               # transpose
             notes[:, [0, 3]] *= rng.uniform(0.9, 1.1)          # faster / slower
@@ -108,7 +122,7 @@ class Dataset:
             notes = notes[-n_kept:] if at_end else notes[:n_kept]
 
         tags = compute_tags(notes)                 # measured on what is kept
-        tags.update({k: self.meta[i][k] for k in ("era", "composer") if k in self.meta[i]})
+        tags.update({k: self.meta[i][k] for k in ("genre", "era", "composer") if k in self.meta[i]})
         if tag_dropout:
             tags = drop_tags(tags, rng)
         return tags, music + ([T.EOS] if at_end else [])
@@ -119,12 +133,12 @@ class Dataset:
         The mask is 1 where the target is a music token (or <eos>): the loss
         ignores padding and does not ask the model to predict the tags."""
         x = np.full((batch_size, ctx), T.PAD, dtype=np.int32)
-        prefix = len(T.TAG_ORDER) + 2              # <bos>, up to six tags, <sep>
+        prefix = len(T.TAG_ORDER) + 2              # <bos>, one tag per category, <sep>
         for b in range(batch_size):
             tags, music = self.passage(rng, ctx - prefix, **kw)
             ids = T.encode_tags(tags) + music
-            x[b, :len(ids)] = ids
-        inputs, targets = x[:, :-1], x[:, 1:]
+            x[b, :len(ids)] = ids                  # the rest stays <pad>
+        inputs, targets = x[:, :-1], x[:, 1:]       # predict the next token
         mask = ((targets >= T.MUSIC0) | (targets == T.EOS)).astype(np.float32)
         return inputs, targets, mask
 
@@ -136,8 +150,8 @@ def fixed_batches(ds, n_batches, batch_size, ctx, seed=0):
             for _ in range(n_batches)]
 ```
 
-`passage` builds the music for one sequence. It takes more notes than can possibly fit (a note is never fewer than three tokens), encodes them, and cuts the token list at a note boundary to fit the budget. Ordinary passages keep their first notes; endings keep their last. The tags are computed *after* the cut, on exactly the notes the model will see.
+`passage` builds the music for one sequence. It picks a piece and copies its fixed tags (genre, era and composer) from the piece's metadata. It takes more notes than can possibly fit (a note is never fewer than three tokens), encodes them, and cuts the token list at a note boundary to fit the budget. Ordinary passages keep their first notes; endings keep their last. The tags are computed *after* the cut, on exactly the notes the model will see.
 
-`batch` stacks 32 sequences into an array, padding the short ones. The inputs are every token but the last; the targets are every token but the first. Position *i* of the input is paired with position *i* + 1 of the sequence, which is the "predict the next token" exercise from chapter 3.
+`batch` stacks the sequences into an array, padding the short ones. The inputs are every token but the last; the targets are every token but the first. Position *i* of the input is paired with position *i* + 1 of the sequence, which is the "predict the next token" exercise from chapter 3.
 
 `fixed_batches` produces the validation batches. It uses a fixed random seed and switches off augmentation and tag dropout, so every validation passage carries its full set of tags and the validation loss is measured on the same data every time and changes only because the model changed.

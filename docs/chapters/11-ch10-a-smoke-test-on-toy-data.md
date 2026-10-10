@@ -4,7 +4,7 @@ Before spending hours on real data, run the whole pipeline on something small. T
 
 ## 10.1 A fake dataset with obvious structure
 
-`make_toy_data.py` writes 120 short MIDI files and a CSV file in exactly the layout MAESTRO uses. Each "piece" is a random walk up and down one scale, with an occasional chord, at one fixed speed, loudness and register.
+`make_toy_data.py` writes 120 short MIDI files and a CSV file in exactly the layout MAESTRO uses, so `prepare.py` can convert it unchanged. The toy pieces are tagged `genre: classical` like MAESTRO's; the toy run only tests the pipeline, not the Aria data. Each "piece" is a random walk up and down one scale, with an occasional chord, at one fixed speed, loudness and register.
 
 ::: filename
 make_toy_data.py
@@ -29,12 +29,15 @@ COMPOSERS = ["Johann Sebastian Bach", "Wolfgang Amadeus Mozart", "Frédéric Cho
 
 
 def toy_piece(rng, seconds=60):
+    """One random piece: a melody wandering on a scale, sometimes over a chord.
+    Key, speed, loudness and register are fixed per piece."""
     tonic, scale = rng.integers(0, 12), (MAJ, MIN)[rng.integers(0, 2)]
     step_ms = rng.choice([60, 90, 140, 220, 450])         # speed of the melody
     loud = rng.choice([35, 52, 64, 76, 95])               # overall loudness
     centre = rng.choice([50, 62, 76])                     # register
     notes, t, degree = [], 0.0, 0
     while t < seconds * 1000:
+        # step up or down the scale by at most two degrees
         degree = int(np.clip(degree + rng.integers(-2, 3), -7, 7))
         pitch = centre + tonic + 12 * (degree // 7) + scale[degree % 7]
         vel = int(np.clip(loud + rng.normal(0, 5), 1, 127))
@@ -44,6 +47,7 @@ def toy_piece(rng, seconds=60):
                 low = centre - 12 + tonic + scale[d]
                 if low != pitch:
                     notes.append((t, low, max(vel - 10, 1), step_ms * 3))
+        # usually one step, sometimes two, with a little timing jitter
         t += step_ms * rng.choice([1, 1, 1, 2]) + rng.normal(0, 4)
     notes = np.array(notes)
     notes[:, 1] = np.clip(notes[:, 1], 21, 108)
@@ -52,16 +56,19 @@ def toy_piece(rng, seconds=60):
 
 
 def main():
+    """Write the toy MIDI files and a MAESTRO-style csv listing them."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="data/toy")
     ap.add_argument("--pieces", type=int, default=120)
     args = ap.parse_args()
     rng = np.random.default_rng(0)
+    # MAESTRO keeps files in one folder per year; mimic that
     os.makedirs(os.path.join(args.out, "2004"), exist_ok=True)
     rows = []
     for i in range(args.pieces):
         name = f"2004/toy_{i:04d}.midi"
         save_notes(toy_piece(rng), os.path.join(args.out, name))
+        # 80 % train, 10 % validation, 10 % test
         split = "train" if i % 10 < 8 else ("validation" if i % 10 == 8 else "test")
         rows.append({"canonical_composer": COMPOSERS[i % len(COMPOSERS)],
                      "canonical_title": f"Toy piece {i}", "split": split, "year": 2004,
@@ -123,10 +130,11 @@ validation loss per token (lower is better; perplexity = e^loss)
   all       1.901   perplexity    6.7
 
 tag adherence (generate with one tag, measure the result)
-  tag        exact  within 1  chance
-  density      60%      100%     20%
-  dynamics     65%      100%     20%
-  register     67%      100%     33%
+  tag        exact   near  chance
+  density      60%   100%     20%
+  dynamics     65%   100%     20%
+  register     67%   100%     33%
+  near: within one step; for key, the same, relative or a fifth-related key
 ```
 
 The second table is the one to look at. Chapter 15 explains it in full; in short, the script asks the model for each value of a tag in turn and measures what comes out. A model that ignored its tags would score near the "chance" column. This one, after a few minutes of training on trivial data and given a single tag each time, landed on the requested value or its immediate neighbour every time.
@@ -135,7 +143,7 @@ Two more checks from the same run. A request with four tags, `density=sparse,dyn
 
 A pitch perplexity of 7.7 is also what the data predicts. Each toy melody moves at random among five neighbouring scale steps, with an occasional chord, so even a perfect model could not do much better than about 5.
 
-**What counts as a pass for you:** the validation loss ends near 2, and "within 1" is at or close to 100% for all three tags. If so, every stage works on your machine.
+**What counts as a pass for you:** the validation loss ends near 2, and "near" is at or close to 100% for all three tags. If so, every stage works on your machine.
 
 ## 10.4 What to do if it fails
 

@@ -6,7 +6,7 @@ A Performer does not care which model is underneath. It talks to a
     start(request, music_tokens) -> logits for the next token
     step(token)                  -> logits for the token after that
 
-Logits are always a NumPy vector over OUR 459-token vocabulary, so the same
+Logits are always a NumPy vector over OUR 465-token vocabulary, so the same
 Performer drives the small MLX model (Part I) and Qwen (Part II).
 """
 import numpy as np

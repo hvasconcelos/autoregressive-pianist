@@ -24,7 +24,7 @@ class QwenBackend:
             self.past = out.past_key_values     # the key/value cache
             z = music_logits(self.model, out.last_hidden_state[0, -1], self.base)
         z = z.float().cpu().numpy()
-        full = np.full(T.VOCAB_SIZE, -np.inf)   # back to our 459-token layout
+        full = np.full(T.VOCAB_SIZE, -np.inf)   # back to our 465-token layout
         full[T.MUSIC0:] = z[:N_MUSIC]
         full[T.EOS] = z[N_MUSIC]                # <|music_end|> plays the part of <eos>
         return full

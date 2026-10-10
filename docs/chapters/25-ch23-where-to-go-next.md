@@ -2,7 +2,9 @@
 
 ## 23.1 More data
 
-The single most effective improvement to either model is more music. Aria-MIDI's deduplicated subset has 371,053 piano files across many genres, against MAESTRO's 962 training performances. Its files are transcriptions and so are a little less clean, and it brings jazz, pop and film music that MAESTRO lacks. Appendix D does this: it prepares a genre-balanced slice of about ten times MAESTRO, with its own train, validation and test sets, adds a genre tag, and trains on both datasets. The rest of the pipeline is unchanged. With much more data than that, raise the model size as well: more layers and a wider vector, in that order.
+The single most effective improvement to either model is still more music. The Aria-MIDI slice in chapter 7 uses 38,464 of the deduplicated subset's 371,053 files, chosen to fit 16 GB of memory and a night of training. On a machine with more memory and time, raise `--notes`; past what fits in memory, `Dataset` would need to read notes from disk instead of loading them all. The pruned subset (820,944 files) goes further still, at some cost in cleanliness.
+
+With much more data, raise the model size as well: more layers and a wider vector, in that order. As a guide, 20 tokens of training per parameter is a good balance, so the 227 million tokens used here suit a model of about 10 to 20 million parameters, which is what we have.
 
 ## 23.2 Longer memory
 

@@ -41,7 +41,7 @@ Expected output:
 
 ``` text
 19.1 M parameters
-logits: (2, 16, 459)
+logits: (2, 16, 465)
 ```
 
 ## 4.3 A few words about MLX
